@@ -1,0 +1,9 @@
+
+openai
+transformers
+torch
+sentence-transformers
+numpy
+opencv-python
+mediapipe
+deepface
