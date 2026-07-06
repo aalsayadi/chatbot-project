@@ -64,37 +64,37 @@ await loadAnimations(vrm);
 const lookAtTarget = new THREE.Object3D();
 scene.add(lookAtTarget);
 
-if (vrm) {
-    createMixer(vrm.scene);
+if (!vrm) {
+    throw new Error("VRM konnte nicht geladen werden");
+}
 
-    const box = new THREE.Box3().setFromObject(vrm.scene);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
+createMixer(vrm.scene);
 
-        const visibleHeight = 1.0; 
-        const yOffset = 1.0;
-        const zOffset = 1.5;
+const box = new THREE.Box3().setFromObject(vrm.scene);
+const center = new THREE.Vector3();
+box.getCenter(center);
 
-        controls.target.set(center.x, center.y - visibleHeight / 2 + yOffset, center.z);
-        camera.position.set(center.x, center.y + 0.2, center.z + zOffset);
+const visibleHeight = 1.0;
+const yOffset = 1.0;
+const zOffset = 1.5;
 
-      if (vrm.lookAt) {
-        vrm.lookAt.target = lookAtTarget;
-        vrm.lookAt.autoUpdate = true;
-    }
+controls.target.set(center.x, center.y - visibleHeight / 2 + yOffset, center.z);
+camera.position.set(center.x, center.y + 0.2, center.z + zOffset);
+
+if (vrm.lookAt) {
+    vrm.lookAt.target = lookAtTarget;
+    vrm.lookAt.autoUpdate = true;
+}
 
 const clock = new THREE.Clock();
 window.setEmotion = setAvatarEmotion;
 window.setState = setAvatarState;
 window.updateAvatarController = updateAvatarController;
 
-if (vrm) {
-    setState("idle");
-}
+setState("idle");
 
 function animate() {
     requestAnimationFrame(animate);
-
     controls.update();
 
     const delta = clock.getDelta();
@@ -102,15 +102,10 @@ function animate() {
     updateAnimations(delta);
     updateAvatarController(delta);
 
-    if (lookAtTarget) {
-        lookAtTarget.position.copy(camera.position);
-    }
-
-    if (vrm) {
-        vrm.update(delta);
-    }
+    lookAtTarget.position.copy(camera.position);
+    vrm.update(delta);
 
     renderer.render(scene, camera);
 }
 
-animate();}
+animate();
