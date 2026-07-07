@@ -1,7 +1,7 @@
 import { setEmotion, setSpeaking, updateLipSync, getCurrentEmotion } from "./emotions.js";
 import { setState as applyState, getState as getCurrentState } from "./states.js";
 
-export function setAvatarEmotion(name, intensity = 1) {
+export function setAvatarEmotion(name, intensity = 1) { //happy (für happy nutzt "relaxed") und surprised bitte nicht aufrufen
     setEmotion(name, intensity);
     return name;
 }

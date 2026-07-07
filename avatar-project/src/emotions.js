@@ -49,7 +49,7 @@ export function setEmotion(name, intensity = 1) {
         setExpressionValue(manager, currentEmotion, normalizedIntensity);
     }
 
-    manager.update();
+    //manager.update();
 
     console.log("Emotion:", currentEmotion);
 }
@@ -97,7 +97,7 @@ export function updateLipSync(deltaTime) {
         setExpressionValue(manager, name, value);
     }
 
-    manager.update();
+    //manager.update();
 }
 
 export function getCurrentEmotion() {
