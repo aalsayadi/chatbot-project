@@ -1,4 +1,4 @@
-# Chatbot with Memory
+# Chatbot with Memory and Voice
 
 A command-line chatbot with long-term memory, sentiment analysis, and (in-progress) webcam-based face/emotion detection and text-to-speech.
 
