@@ -19,21 +19,9 @@ class MemoryManager:
         try:
             raw = self.llm.extract_memory(text)
 
-            # For debugging, you can print the raw memory data
-            print("\n=== RAW MEMORY EXTRACTION ===")
-            print(raw)
-
             data = json.loads(raw)
 
-            # For debugging, you can print the parsed memory data
-            print("\n=== PARSED MEMORIES ===")
-            print(data)
-
             for mem in data.get("memories",[]):
-                # For debugging, you can print each memory before saving
-                print("\n=== MEMORY TO SAVE ===")
-                print(mem)
-
                 self.store.save_memory(mem)
 
         except Exception as e:

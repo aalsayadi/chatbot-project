@@ -7,6 +7,7 @@ from memory.memory_manager import MemoryManager
 from sentiment.sentiment_analyzer import SentimentAnalyzer
 from llm.ollama_client import OllamaClient
 from prompt.prompt_builder import PromptBuilder
+from voice.tts import speak
 
 memory = MemoryManager()
 sentiment = SentimentAnalyzer()
@@ -35,5 +36,6 @@ while True:
 
     response = llm.chat(messages)
     print("\n🤖 AI:", response, "\n")
+    speak(response)
 
     memory.add_assistant_message(response)
