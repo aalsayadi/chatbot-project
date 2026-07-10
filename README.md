@@ -32,6 +32,7 @@ requirements.txt
 ## Setup
 
 1. **Clone the repo**
+
    ```bash
    git clone https://https://github.com/aalsayadi/chatbot-project.git
    cd chatbot-project
@@ -40,18 +41,21 @@ requirements.txt
 2. **Create and activate a virtual environment**
 
    macOS/Linux:
+
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    ```
 
    Windows:
+
    ```powershell
    py -3.12 -m venv venv
    venv\Scripts\activate
    ```
 
 3. **Install dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
