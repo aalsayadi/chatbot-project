@@ -78,3 +78,10 @@ Type your messages at the `🧑 You:` prompt. Type `exit` or `quit` to end the c
 
 - **Python 3.14**: `kokoro` (text-to-speech) depends on `spacy`, which does not currently have published Python 3.14 wheels for some of its own dependencies. If `pip install -r requirements.txt` fails while building `blis`/`thinc`, use Python 3.12 in your virtual environment instead (see the Windows setup command above).
 - **Webcam features** (`vision/`) are set up but not yet wired into the main chat loop.
+
+## Running the UI
+
+```bash
+npm install
+npm run dev
+```
