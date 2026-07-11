@@ -84,16 +84,26 @@ input {
   grid-template-columns: minmax(280px, 25vw) minmax(0, 1fr) minmax(260px, 21vw);
 }
 
+.appFrame.micExpanded {
+  grid-template-columns: minmax(460px, 42vw) minmax(0, 1fr) 52px;
+}
+
+.appFrame.rightAsideOpen.micExpanded {
+  grid-template-columns: minmax(460px, 42vw) minmax(0, 1fr) minmax(260px, 21vw);
+}
+
 .avatarPanel {
   background: linear-gradient(180deg, #e8e0f4 0%, #f4f0fa 100%);
   border: 1px solid rgba(143, 123, 178, 0.22);
   border-radius: 24px;
   padding: 22px;
+  padding-bottom: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   box-shadow: var(--shadow-soft);
+  position: relative;
 }
 
 .assistantHead h1 {
@@ -121,6 +131,29 @@ input {
   place-items: center;
 }
 
+.avatarSelectorDot {
+  position: absolute;
+  top: 5%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 1px solid rgba(124, 104, 155, 0.34);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 16px rgba(52, 42, 75, 0.16);
+  filter: brightness(1.9);
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.avatarSelectorDotLeft {
+  left: -40px;
+}
+
+.avatarSelectorDotRight {
+  right: -40px;
+}
+
 .avatarGlow {
   position: absolute;
   inset: 0;
@@ -128,7 +161,7 @@ input {
   background: radial-gradient(
     circle,
     rgba(172, 144, 212, 0.45),
-    rgba(255, 255, 255, 0)
+    rgba(111, 47, 47, 0)
   );
 }
 
@@ -146,7 +179,7 @@ input {
 }
 
 .assistantBubble {
-  margin-top: 90px;
+  margin-top: 36px;
   max-width: 260px;
   padding: 14px;
   border-radius: 18px;
@@ -158,16 +191,30 @@ input {
 }
 
 .assistantFooter {
-  margin-top: 20px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  margin-top: 0;
+  display: block;
   font-size: 0.9rem;
   color: #828c8f;
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 22px;
+}
+
+.micErrorNotice {
+  margin: 12px 0 0;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #7d3e3e;
+  background: rgba(255, 235, 235, 0.95);
+  border: 1px solid rgba(198, 107, 107, 0.36);
 }
 
 .avatarMicButton {
-  margin-top: 18px;
+  margin-top: 40px;
   width: 56px;
   height: 56px;
   border-radius: 999px;
@@ -178,14 +225,14 @@ input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 0 rgba(222, 72, 72, 0.35);
+  box-shadow: 0 0 0 0 rgba(219, 103, 103, 0.35);
   transition:
     background-color 0.2s ease,
     color 0.2s ease;
 }
 
 .avatarMicButton.active {
-  background: #de4848;
+  background: #e07171;
   color: #ffffff;
   animation: micPulse 1.2s ease-out infinite;
 }
@@ -343,6 +390,8 @@ input {
   border: 1px solid rgba(143, 123, 178, 0.22);
   background: linear-gradient(180deg, #eef6f0 0%, #f8fcf9 100%);
   padding: 18px 10px;
+  min-height: calc(100vh - 52px);
+  max-height: calc(100vh - 52px);
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
@@ -382,7 +431,10 @@ input {
 .rightAsideContent {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 10px;
+  overflow-y: auto;
   transition: opacity 0.18s ease;
 }
 
@@ -417,6 +469,45 @@ input {
   gap: 10px;
 }
 
+.helpView {
+  display: grid;
+  gap: 10px;
+}
+
+.helpViewHeader {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+
+.helpViewHeader h4 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.helpIntro {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.helpList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.helpList li {
+  margin: 0;
+}
+
 .savedChatsViewHeader {
   display: flex;
   align-items: center;
@@ -432,6 +523,7 @@ input {
 
 .helpCloseButton {
   width: auto;
+  margin-left: auto;
   border: 1px solid rgba(129, 155, 142, 0.24);
   background: rgba(255, 255, 255, 0.86);
   border-radius: 10px;
@@ -530,9 +622,11 @@ input {
 .rightAsideToggleButton {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
-  border: 1.5px solid rgba(33, 49, 41, 0.75);
+  border-radius: 10px;
+  border: 1px solid rgba(125, 158, 139, 0.25);
+  padding: 6px 10px;
   background: rgba(255, 255, 255, 0.98);
+  border-radius: 10px;
   color: var(--ink);
   box-shadow: none;
   display: inline-flex;
@@ -927,6 +1021,11 @@ input {
   .appFrame {
     grid-template-columns: 1fr;
     padding: 14px;
+  }
+
+  .appFrame.micExpanded,
+  .appFrame.rightAsideOpen.micExpanded {
+    grid-template-columns: 1fr;
   }
 
   .appFrame.rightAsideOpen {

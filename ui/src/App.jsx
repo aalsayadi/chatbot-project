@@ -29,12 +29,26 @@ const initialMessages = [
   },
 ];
 
+const getMicErrorMessage = (errorCode) => {
+  if (errorCode === "not-allowed" || errorCode === "service-not-allowed") {
+    return "Microphone access was blocked. Please allow microphone access and try again.";
+  }
+
+  if (errorCode === "audio-capture") {
+    return "No microphone could be accessed. Check that a microphone is connected and available.";
+  }
+
+  return "The microphone could not be accessed. Please try again.";
+};
+
 function App() {
+  const [hasUsedMicOnce, setHasUsedMicOnce] = useState(false);
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState("");
   const [isAsideOpen, setIsAsideOpen] = useState(true);
   const [isMicActive, setIsMicActive] = useState(false);
   const [isSpeechSupported, setIsSpeechSupported] = useState(true);
+  const [micError, setMicError] = useState("");
   const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
   const [savedChats, setSavedChats] = useState([]);
   const [isSaveTitleModalOpen, setIsSaveTitleModalOpen] = useState(false);
@@ -60,6 +74,7 @@ function App() {
 
     if (!SpeechRecognitionCtor) {
       setIsSpeechSupported(false);
+      setMicError("Microphone input is not supported in this browser.");
       return;
     }
 
@@ -113,8 +128,14 @@ function App() {
       setIsMicActive(false);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
       setIsMicActive(false);
+
+      if (event?.error === "aborted") {
+        return;
+      }
+
+      setMicError(getMicErrorMessage(event?.error));
     };
 
     recognitionRef.current = recognition;
@@ -145,7 +166,10 @@ function App() {
 
     if (isMicActive && recognitionRef.current) {
       recognitionRef.current.stop();
+      setIsMicActive(false);
     }
+
+    setMicError("");
 
     const trimmedDraft = draft.trim();
     if (!trimmedDraft) {
@@ -235,17 +259,24 @@ function App() {
 
     if (isMicActive) {
       recognitionRef.current.stop();
+      setMicError("");
       return;
     }
 
     speechBaseDraftRef.current = draft.trim();
     speechFinalTranscriptRef.current = "";
+    setMicError("");
 
     try {
       recognitionRef.current.start();
       setIsMicActive(true);
+
+      if (!hasUsedMicOnce) {
+        setHasUsedMicOnce(true);
+      }
     } catch {
       setIsMicActive(false);
+      setMicError("The microphone could not be accessed. Please try again.");
     }
   };
 
@@ -354,13 +385,27 @@ function App() {
   };
 
   return (
-    <div className={`appFrame ${isAsideOpen ? "rightAsideOpen" : ""}`}>
+    <div
+      className={`appFrame ${isAsideOpen ? "rightAsideOpen" : ""} ${
+        isMicActive ? "micExpanded" : ""
+      }`}
+    >
       <aside className="avatarPanel">
         <div className="assistantHead">
           <div className="assistantBadge">Care Companion</div>
         </div>
 
         <div className="avatarStage" aria-hidden="true">
+          <button
+            type="button"
+            className="avatarSelectorDot avatarSelectorDotLeft"
+            aria-label="Choose avatar 2"
+          />
+          <button
+            type="button"
+            className="avatarSelectorDot avatarSelectorDotRight"
+            aria-label="Choose avatar 3"
+          />
           <div className="avatarGlow" />
           <div className="avatarCore">A</div>
         </div>
@@ -381,9 +426,17 @@ function App() {
           />
         </button>
 
-        <div className="assistantBubble">
-          Hello, I'm here to support you. How can I assist you today?
-        </div>
+        {micError && (
+          <p className="micErrorNotice" role="alert" aria-live="polite">
+            {micError}
+          </p>
+        )}
+
+        {!hasUsedMicOnce && (
+          <div className="assistantBubble">
+            Hello, I'm here to support you. How can I assist you today?
+          </div>
+        )}
         <div className="assistantFooter">
           As a Care Companion, I'm here to provide support and guidance. Beware
           that Chatbots make mistakes. Verify any information I provide with a
@@ -711,6 +764,46 @@ function App() {
                   />
                 </button>
               </div>
+
+              <ul className="helpList">
+                <li>
+                  Choosing an assistant: By clicking on the left or right
+                  profile picture of the assistant, you can choose which
+                  assistant you want to talk to.
+                </li>
+                <li>
+                  Sending Messages: Underneath the assistant, you can find the
+                  microphone. It activates by clicking on it. Please speak while
+                  it's pulsating in red. When you have stopped talking click on
+                  it again and verify in the textfield, if the text is correct.
+                  If not, you can edit it and then click the send button on the
+                  right side of the textfield. You can also send a message by
+                  typing it in the textfield and pressing enter or clicking the
+                  send button.
+                </li>
+                <li>
+                  Pinning a Message: You can pin a message from the assistant by
+                  hovering over the message and clicking the pin symbol on the
+                  top right corner that appears when hovering over the
+                  assistant's message. To see all the pinned messages you can
+                  click on the pin symbol on the top right corner of the
+                  Conversation panel (left from the save button). You can
+                  navigate through the pinned messages by clicking on the up and
+                  down arrows next to the pin symbol.
+                </li>
+                <li>
+                  Saving a Chat: You can save a chat by clicking the floppy
+                  disk/save button to the top right corner of the
+                  Conversation-panel
+                </li>
+                <li>
+                  Options: you can open a new chat by clicking the "New Chat"
+                  button in the right sidebar - you can access saved
+                  conversations by clicking the "Saved Conversations" button
+                  underneath it. - you can access the knowledge graph by
+                  clicking the "Knowledge Graph" button underneath it.
+                </li>
+              </ul>
             </section>
           ) : (
             <>
