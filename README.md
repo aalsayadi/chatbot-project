@@ -1,4 +1,4 @@
-# Chatbot with Memory and Voice (TTS)
+# Chatbot with Memory and Voice
 
 A command-line chatbot with long-term memory, sentiment analysis, and (in-progress) webcam-based face/emotion detection and text-to-speech.
 
@@ -7,6 +7,7 @@ A command-line chatbot with long-term memory, sentiment analysis, and (in-progre
 - Chats using a local LLM via [Ollama](https://ollama.com) (no API key or internet required at runtime)
 - Remembers facts about the user across the conversation (long-term memory)
 - Analyzes the sentiment of each message
+- Listens to you and transcribes your speech locally (faster-whisper)
 - Speaks its replies out loud using local text-to-speech (Kokoro)
 - Face detection setup in place (`vision/`), ready to be extended into emotion/gaze features
 
@@ -20,6 +21,7 @@ sentiment/sentiment_analyzer.py
 prompt/prompt_builder.py      # builds the final prompt sent to the LLM
 vision/                       # webcam face + emotion detection (setup only so far)
 voice/tts.py                  # text-to-speech (Kokoro)
+voice/stt.py                  # speech-to-text (faster-whisper)
 requirements.txt
 ```
 
@@ -33,7 +35,7 @@ requirements.txt
 
 1. **Clone the repo**
    ```bash
-   git clone https://https://github.com/aalsayadi/chatbot-project.git
+   git clone https://github.com/aalsayadi/chatbot-project.git
    cd chatbot-project
    ```
 
@@ -68,9 +70,10 @@ requirements.txt
 python main.py
 ```
 
-Type your messages at the `🧑 You:` prompt. Type `exit` or `quit` to end the conversation.
+When you see `🎤 Listening...`, speak your message -- it records for a few seconds, transcribes it, and replies both in text and out loud. Say "exit" or "quit" to end the conversation.
 
 ## Known issues
 
 - **Python 3.14**: `kokoro` (text-to-speech) depends on `spacy`, which does not currently have published Python 3.14 wheels for some of its own dependencies. If `pip install -r requirements.txt` fails while building `blis`/`thinc`, use Python 3.12 in your virtual environment instead (see the Windows setup command above).
 - **Webcam features** (`vision/`) are set up but not yet wired into the main chat loop.
+- **Voice input** currently records for a fixed 5 seconds per turn rather than detecting when you stop talking.

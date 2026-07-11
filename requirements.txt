@@ -8,3 +8,5 @@ mediapipe
 kokoro
 soundfile
 spacy>=3.8.14,<4.0.0
+faster-whisper
+sounddevice

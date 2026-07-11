@@ -1,3 +1,5 @@
+"""Webcam face-detection setup (MediaPipe). Not yet wired into main.py."""
+
 import os
 import urllib.request
 

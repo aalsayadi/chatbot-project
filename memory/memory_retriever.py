@@ -1,11 +1,20 @@
+"""Ranks stored memories by semantic similarity to the current query."""
+
 from sentence_transformers import SentenceTransformer
 import numpy as np
 
 class MemoryRetriever:
+    """Retrieves the most relevant stored memories using embedding similarity."""
+
     def __init__(self):
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def retrieve(self, query, memories, top_k=5):
+        """Return up to `top_k` memories most similar to `query`.
+
+        Similarity is cosine similarity between sentence embeddings;
+        results are ordered from most to least relevant.
+        """
         if not memories:
             return []
 
