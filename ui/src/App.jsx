@@ -1,0 +1,1066 @@
+import { useEffect, useRef, useState } from "react";
+import sidebarIcon from "../assets/icons/sidebar.svg";
+import microphoneIcon from "../assets/icons/microphone.svg";
+import pinMessageIcon from "../assets/icons/pinMessage.svg";
+import trashBinIcon from "../assets/icons/trashBin.svg";
+import leftArrowIcon from "../assets/icons/leftArrow.svg";
+import Avatar from "./avatar/Avatar.jsx";
+import { PERSONAS, PERSONA_ORDER, DEFAULT_PERSONA } from "./avatar/personas.js";
+import { sendChat, synthesizeSpeech, generateTitle } from "./api.js";
+import { createVoiceSession } from "./voice/voiceSession.js";
+
+function App() {
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [persona, setPersona] = useState(DEFAULT_PERSONA);
+  const [isSending, setIsSending] = useState(false);
+  const avatarControlsRef = useRef(null);
+  const audioRef = useRef(null);
+  const [isAsideOpen, setIsAsideOpen] = useState(true);
+  const [isMicActive, setIsMicActive] = useState(false);
+  // Voice input now streams mic audio to the backend (Silero VAD +
+  // faster-whisper), so it works in every major browser. Support just needs
+  // getUserMedia + AudioWorklet + WebSocket. Detected synchronously so the
+  // voice button is disabled upfront where those are unavailable.
+  const [isSpeechSupported] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      Boolean(navigator.mediaDevices?.getUserMedia) &&
+      typeof window.AudioWorkletNode !== "undefined" &&
+      typeof window.WebSocket !== "undefined",
+  );
+  const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
+  const [savedChats, setSavedChats] = useState([]);
+  const [pendingDeleteSavedChat, setPendingDeleteSavedChat] = useState(null);
+  const [activeSavedChatId, setActiveSavedChatId] = useState(null);
+  const [isSavedChatsOpen, setIsSavedChatsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isPinnedNavigatorOpen, setIsPinnedNavigatorOpen] = useState(false);
+  const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
+
+  // Voice mode: mic input + auto-playing TTS + live transcript.
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState("idle"); // listening|thinking|speaking|idle
+  const [voiceError, setVoiceError] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [playingMessageId, setPlayingMessageId] = useState(null);
+  const voiceModeRef = useRef(false);
+  const isSendingRef = useRef(false);
+  const messagesRef = useRef([]);
+  const voiceSessionRef = useRef(null);
+  const submitMessageRef = useRef(null);
+
+  // Auto-save bookkeeping for the current conversation.
+  const activeChatIdRef = useRef(null);
+  const currentTitleRef = useRef(null);
+
+  const messageRefs = useRef({});
+  const conversationEndRef = useRef(null);
+  const isReviewingSavedChat = activeSavedChatId !== null;
+  const activeSavedChat = savedChats.find(
+    (savedChat) => savedChat.id === activeSavedChatId,
+  );
+
+  // Keep refs in sync for use inside stable recognition callbacks.
+  useEffect(() => {
+    voiceModeRef.current = voiceMode;
+  }, [voiceMode]);
+  useEffect(() => {
+    isSendingRef.current = isSending;
+  }, [isSending]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Auto-scroll the transcript to the newest message.
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [messages]);
+
+  // Tear the voice session down on unmount.
+  useEffect(() => {
+    return () => {
+      try {
+        voiceSessionRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      voiceSessionRef.current = null;
+    };
+  }, []);
+
+  // Called when the backend returns a transcribed utterance during voice mode.
+  const handleVoiceTranscript = (text) => {
+    const spoken = (text || "").trim();
+    setInterimTranscript("");
+    if (!voiceModeRef.current) {
+      return;
+    }
+    if (spoken) {
+      // Stop capturing while we think + speak (avoids capturing our own TTS).
+      voiceSessionRef.current?.pause();
+      submitMessageRef.current?.(spoken, { viaVoice: true });
+    }
+    // If empty (VAD misfire), the session keeps listening automatically.
+  };
+
+  const handleVoiceError = (message) => {
+    // Surface connection/permission problems and drop out of voice mode.
+    const lowered = (message || "").toLowerCase();
+    const isMicIssue =
+      lowered.includes("mic") ||
+      lowered.includes("blocked") ||
+      lowered.includes("allowed");
+    setVoiceError(
+      isMicIssue
+        ? "Microphone access is blocked. Allow mic access in your browser to use voice mode."
+        : "Voice input failed. Make sure the backend is running, then try again.",
+    );
+    exitVoiceMode();
+    avatarControlsRef.current?.setState("idle");
+  };
+
+  const pinnedAssistantMessageIds = messages
+    .filter(
+      (message) =>
+        message.role === "assistant" && pinnedMessageIds.includes(message.id),
+    )
+    .map((message) => message.id);
+
+  const pinnedCount = pinnedAssistantMessageIds.length;
+  const currentPinnedMessageId =
+    pinnedCount > 0
+      ? pinnedAssistantMessageIds[Math.min(currentPinnedIndex, pinnedCount - 1)]
+      : null;
+
+  const handleAvatarReady = (controls) => {
+    avatarControlsRef.current = controls;
+  };
+
+  const handleSelectPersona = (nextPersona) => {
+    if (nextPersona === persona) {
+      return;
+    }
+
+    setPersona(nextPersona);
+    // Swap the avatar model; the matching voice follows automatically because
+    // the new persona is sent to /chat on the next message.
+    avatarControlsRef.current?.loadPersona(PERSONAS[nextPersona].vrmPath);
+  };
+
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+  };
+
+  // Resume the streaming voice session to listen for the next utterance.
+  const resumeListening = () => {
+    if (!voiceModeRef.current) {
+      return;
+    }
+    setInterimTranscript("");
+    setVoiceStatus("listening");
+    setIsMicActive(true);
+    avatarControlsRef.current?.setState("listening");
+    voiceSessionRef.current?.resume();
+  };
+
+  // Play base64 WAV audio and tie the avatar's "speaking" animation to actual
+  // playback: speaking starts on `play`, ends on `ended`/`error`. This is the
+  // ONLY place that puts the avatar into the speaking state.
+  const playAudio = (base64, emotion, onDone) => {
+    stopAudio();
+    const controls = avatarControlsRef.current;
+    const audio = new Audio(`data:audio/wav;base64,${base64}`);
+    audioRef.current = audio;
+
+    audio.onplay = () => {
+      setVoiceStatus("speaking");
+      controls?.setState("speaking", { emotion, intensity: 1 });
+    };
+
+    const done = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      // Keep the emotion expression but stop the speaking/lip-sync animation.
+      controls?.setState("idle", { emotion });
+      onDone?.();
+    };
+    audio.onended = done;
+    audio.onerror = done;
+
+    audio.play().catch(done);
+  };
+
+  // React to a reply. Speaking is driven purely by audio playback (see
+  // playAudio); when there is no audio (text mode) we only reflect the
+  // emotion and settle to idle -- no speaking animation.
+  const reactToReply = (data, { viaVoice }) => {
+    const controls = avatarControlsRef.current;
+    const emotion = data.emotion || "default";
+
+    // Voice mode with audio: playback drives speaking, then resume listening.
+    if (viaVoice && voiceModeRef.current && data.audio) {
+      playAudio(data.audio, emotion, () => {
+        resumeListening();
+      });
+      return;
+    }
+
+    // No audio is playing: show the emotion but do NOT enter speaking.
+    stopAudio();
+    controls?.setState("idle", { emotion });
+
+    if (viaVoice && voiceModeRef.current) {
+      // Voice mode but the server returned no audio -- keep the loop going.
+      resumeListening();
+    } else {
+      setVoiceStatus("idle");
+    }
+  };
+
+  const submitMessage = async (text, { viaVoice }) => {
+    if (isReviewingSavedChat || isSendingRef.current) {
+      return;
+    }
+
+    const trimmed = (text || "").trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const userMessage = { id: `m${Date.now()}`, role: "user", text: trimmed };
+    const convoWithUser = [...messagesRef.current, userMessage];
+    setMessages(convoWithUser);
+    messagesRef.current = convoWithUser;
+
+    setDraft("");
+    setInterimTranscript("");
+    setIsSending(true);
+    isSendingRef.current = true;
+    setVoiceStatus("thinking");
+    avatarControlsRef.current?.setState("thinking");
+
+    try {
+      const data = await sendChat({
+        message: trimmed,
+        persona: PERSONAS[persona].backend,
+        voiceMode: viaVoice, // shorter, spoken-style replies in voice mode
+        tts: viaVoice, // only synthesize audio when actually in voice mode
+      });
+
+      const assistantMessage = {
+        id: `m${Date.now()}-a`,
+        role: "assistant",
+        text: data.reply,
+        emotion: data.emotion,
+      };
+      const convoWithReply = [...convoWithUser, assistantMessage];
+      setMessages(convoWithReply);
+      messagesRef.current = convoWithReply;
+
+      reactToReply(data, { viaVoice });
+      persistChat(convoWithReply);
+    } catch (error) {
+      console.error(error);
+      const errorMessage = {
+        id: `m${Date.now()}-e`,
+        role: "assistant",
+        text: "Sorry, I couldn't reach the server. Please make sure the backend is running.",
+      };
+      setMessages((previousMessages) => [...previousMessages, errorMessage]);
+      setVoiceStatus("idle");
+      avatarControlsRef.current?.setState("idle");
+      if (viaVoice && voiceModeRef.current) {
+        resumeListening();
+      }
+    } finally {
+      setIsSending(false);
+      isSendingRef.current = false;
+    }
+  };
+
+  // Expose the latest submitMessage to the voice-session transcript callback.
+  submitMessageRef.current = submitMessage;
+
+  const handleSend = () => submitMessage(draft, { viaVoice: false });
+
+  // Play a specific assistant reply aloud on demand (text-mode speaker icon).
+  // Audio is synthesized lazily here -- only when the user asks to hear it.
+  const handlePlayMessage = async (message) => {
+    try {
+      setPlayingMessageId(message.id);
+      const { audio } = await synthesizeSpeech({
+        text: message.text,
+        persona: PERSONAS[persona].backend,
+      });
+      if (!audio) {
+        setPlayingMessageId(null);
+        return;
+      }
+      playAudio(audio, message.emotion || "default", () =>
+        setPlayingMessageId(null),
+      );
+    } catch (error) {
+      console.error(error);
+      setPlayingMessageId(null);
+    }
+  };
+
+  const handleComposerKeyDown = (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleTogglePinnedMessage = (messageId) => {
+    setPinnedMessageIds((previousIds) => {
+      if (previousIds.includes(messageId)) {
+        return previousIds.filter((id) => id !== messageId);
+      }
+
+      return [...previousIds, messageId];
+    });
+  };
+
+  const scrollToPinnedIndex = (targetIndex) => {
+    const targetId = pinnedAssistantMessageIds[targetIndex];
+    if (!targetId) {
+      return;
+    }
+
+    const targetMessageElement = messageRefs.current[targetId];
+    if (targetMessageElement) {
+      targetMessageElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  };
+
+  const handleTogglePinnedNavigator = () => {
+    setIsPinnedNavigatorOpen((previousValue) => {
+      const nextValue = !previousValue;
+
+      if (nextValue && pinnedCount > 0) {
+        const safeIndex = Math.min(currentPinnedIndex, pinnedCount - 1);
+        requestAnimationFrame(() => {
+          scrollToPinnedIndex(safeIndex);
+        });
+      }
+
+      return nextValue;
+    });
+  };
+
+  const handleNavigatePinnedMessages = (direction) => {
+    if (pinnedCount === 0) {
+      return;
+    }
+
+    setCurrentPinnedIndex((previousIndex) => {
+      const nextIndex =
+        direction === "up"
+          ? (previousIndex - 1 + pinnedCount) % pinnedCount
+          : (previousIndex + 1) % pinnedCount;
+
+      requestAnimationFrame(() => {
+        scrollToPinnedIndex(nextIndex);
+      });
+
+      return nextIndex;
+    });
+  };
+
+  const handleToggleVoiceMode = async () => {
+    if (isReviewingSavedChat) {
+      return;
+    }
+
+    if (voiceModeRef.current) {
+      // Exit voice mode: stop the session and return the avatar to idle.
+      exitVoiceMode();
+      avatarControlsRef.current?.setState("idle");
+      return;
+    }
+
+    if (!isSpeechSupported) {
+      setVoiceError(
+        "Voice input isn't available in this browser. Try a recent Chrome, Firefox, Safari or Edge.",
+      );
+      return;
+    }
+
+    // Enter voice mode: open the streaming session (getUserMedia prompts for
+    // mic permission here, inside the click gesture).
+    setVoiceError("");
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    setVoiceStatus("listening");
+    setIsMicActive(true);
+    avatarControlsRef.current?.setState("listening");
+
+    const session = createVoiceSession({
+      onStatus: (status) => {
+        // Ignore status flips once we've left voice mode or are mid-turn.
+        if (voiceModeRef.current && !isSendingRef.current) {
+          setVoiceStatus(status);
+        }
+      },
+      onTranscript: handleVoiceTranscript,
+      onError: handleVoiceError,
+    });
+    voiceSessionRef.current = session;
+
+    try {
+      await session.start();
+    } catch (error) {
+      console.error(error);
+      // getUserMedia rejects if the user blocks the mic or none is present.
+      handleVoiceError(
+        error?.name === "NotAllowedError"
+          ? "mic-blocked"
+          : "Voice connection failed.",
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (pinnedCount === 0) {
+      setCurrentPinnedIndex(0);
+      return;
+    }
+
+    setCurrentPinnedIndex((previousIndex) =>
+      Math.min(previousIndex, pinnedCount - 1),
+    );
+  }, [pinnedCount]);
+
+  // --- Automatic conversation saving -----------------------------------
+  const buildTranscriptSnippet = (convo) =>
+    convo
+      .slice(0, 4)
+      .map(
+        (message) =>
+          `${message.role === "user" ? "User" : "Assistant"}: ${message.text.slice(0, 200)}`,
+      )
+      .join("\n");
+
+  const upsertSavedChat = (convo) => {
+    const id = activeChatIdRef.current;
+    if (!id) {
+      return;
+    }
+
+    const assistantMessageCount = convo.filter(
+      (message) => message.role === "assistant",
+    ).length;
+
+    const savedLabelTime = new Date().toLocaleString([], {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    const entry = {
+      id,
+      title: currentTitleRef.current || "Conversation",
+      summary: `${convo.length} messages, ${assistantMessageCount} assistant`,
+      savedAt: savedLabelTime,
+      messages: convo,
+      pinnedMessageIds,
+    };
+
+    setSavedChats((previousChats) => {
+      const index = previousChats.findIndex((chat) => chat.id === id);
+      if (index === -1) {
+        return [entry, ...previousChats];
+      }
+      const next = [...previousChats];
+      next[index] = entry;
+      return next;
+    });
+  };
+
+  // Persist the conversation automatically after each exchange. Generates a
+  // fitting title from the content the first time it becomes savable.
+  const persistChat = (convo) => {
+    if (isReviewingSavedChat) {
+      return;
+    }
+    if (!convo.some((message) => message.role === "assistant")) {
+      return; // nothing meaningful to save yet
+    }
+
+    if (!activeChatIdRef.current) {
+      const chatId = `saved-${Date.now()}`;
+      activeChatIdRef.current = chatId;
+
+      // Provisional title from the first user message; refined via the LLM.
+      const firstUser = convo.find((message) => message.role === "user");
+      const fallback = firstUser
+        ? firstUser.text.slice(0, 32) + (firstUser.text.length > 32 ? "…" : "")
+        : "New conversation";
+      currentTitleRef.current = fallback;
+
+      generateTitle({ text: buildTranscriptSnippet(convo) })
+        .then(({ title }) => {
+          // Ignore if the user has since moved to a different conversation.
+          if (title && activeChatIdRef.current === chatId) {
+            currentTitleRef.current = title;
+            upsertSavedChat(messagesRef.current);
+          }
+        })
+        .catch(() => {
+          // keep the fallback title
+        });
+    }
+
+    upsertSavedChat(convo);
+  };
+
+  const resetActiveChat = () => {
+    activeChatIdRef.current = null;
+    currentTitleRef.current = null;
+  };
+
+  const exitVoiceMode = () => {
+    voiceModeRef.current = false;
+    setVoiceMode(false);
+    try {
+      voiceSessionRef.current?.stop();
+    } catch {
+      // ignore
+    }
+    voiceSessionRef.current = null;
+    stopAudio();
+    setIsMicActive(false);
+    setInterimTranscript("");
+    setVoiceStatus("idle");
+  };
+
+  const handleLoadSavedChat = (savedChat) => {
+    exitVoiceMode();
+    setMessages(savedChat.messages);
+    messagesRef.current = savedChat.messages;
+    setPinnedMessageIds(savedChat.pinnedMessageIds ?? []);
+    setDraft("");
+    setActiveSavedChatId(savedChat.id);
+    setIsPinnedNavigatorOpen(false);
+    setIsSavedChatsOpen(false);
+    setIsHelpOpen(false);
+  };
+
+  const handleStartNewChat = () => {
+    exitVoiceMode();
+    resetActiveChat();
+    setMessages([]);
+    messagesRef.current = [];
+    setDraft("");
+    setPinnedMessageIds([]);
+    setIsPinnedNavigatorOpen(false);
+    setCurrentPinnedIndex(0);
+    setActiveSavedChatId(null);
+    setIsSavedChatsOpen(false);
+    setIsHelpOpen(false);
+    avatarControlsRef.current?.setState("idle");
+  };
+
+  const handleDeleteSavedChat = (savedChatId) => {
+    setSavedChats((previousChats) =>
+      previousChats.filter((savedChat) => savedChat.id !== savedChatId),
+    );
+
+    if (activeSavedChatId === savedChatId) {
+      setActiveSavedChatId(null);
+    }
+  };
+
+  const handleRequestDeleteSavedChat = (savedChat) => {
+    setPendingDeleteSavedChat(savedChat);
+  };
+
+  const handleCancelDeleteSavedChat = () => {
+    setPendingDeleteSavedChat(null);
+  };
+
+  const handleConfirmDeleteSavedChat = () => {
+    if (!pendingDeleteSavedChat) {
+      return;
+    }
+
+    handleDeleteSavedChat(pendingDeleteSavedChat.id);
+    setPendingDeleteSavedChat(null);
+  };
+
+  return (
+    <div className={`appFrame ${isAsideOpen ? "rightAsideOpen" : ""}`}>
+      <aside className="avatarPanel">
+        <div className="assistantHead">
+          <div className="assistantBadge">Care Companion</div>
+        </div>
+
+        <div className="avatarStage">
+          <div className="avatarGlow" aria-hidden="true" />
+          <Avatar persona={persona} onReady={handleAvatarReady} />
+        </div>
+
+        <div
+          className="personaSwitcher"
+          role="group"
+          aria-label="Choose avatar persona"
+        >
+          {PERSONA_ORDER.map((personaKey) => (
+            <button
+              key={personaKey}
+              type="button"
+              className={`personaButton ${persona === personaKey ? "active" : ""}`}
+              aria-pressed={persona === personaKey}
+              onClick={() => handleSelectPersona(personaKey)}
+            >
+              {PERSONAS[personaKey].label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          className={`avatarMicButton ${voiceMode ? "active" : ""}`}
+          aria-label={voiceMode ? "Stop voice mode" : "Start voice mode"}
+          aria-pressed={voiceMode}
+          onClick={handleToggleVoiceMode}
+          disabled={isReviewingSavedChat || !isSpeechSupported}
+          title={
+            isSpeechSupported
+              ? voiceMode
+                ? "Stop voice mode"
+                : "Start voice mode"
+              : "Voice mode needs a browser with microphone + AudioWorklet support"
+          }
+        >
+          <img
+            src={microphoneIcon}
+            alt=""
+            aria-hidden="true"
+            className="microphoneIcon"
+          />
+        </button>
+
+        {!isSpeechSupported && (
+          <p className="voiceHint">
+            Voice mode isn&apos;t available in this browser.
+          </p>
+        )}
+        {voiceError && <p className="voiceError">{voiceError}</p>}
+
+        {voiceMode ? (
+          <div className="voiceStatus" aria-live="polite">
+            <span className={`voiceStatusPill ${voiceStatus}`}>
+              {voiceStatus === "listening" && "Listening…"}
+              {voiceStatus === "transcribing" && "Transcribing…"}
+              {voiceStatus === "thinking" && "Thinking…"}
+              {voiceStatus === "speaking" && "Speaking…"}
+              {voiceStatus === "idle" && "Voice mode"}
+            </span>
+            {interimTranscript && (
+              <p className="voiceInterim">{interimTranscript}</p>
+            )}
+          </div>
+        ) : (
+          <div className="assistantBubble">
+            Hello, I'm here to support you. How can I assist you today?
+          </div>
+        )}
+
+        <div className="assistantFooter">
+          As a Care Companion, I'm here to provide support and guidance. Beware
+          that Chatbots make mistakes. Verify any information I provide with a
+          qualified professional.
+        </div>
+      </aside>
+
+      <main className="chatPanel">
+        <header className="chatHeader">
+          <div>
+            <p className="chatEyebrow">Chat</p>
+            <h2>
+              Conversation
+              {activeSavedChat ? ` "${activeSavedChat.title}"` : ""}
+            </h2>
+          </div>
+          <div className="headerControls">
+            {isPinnedNavigatorOpen && (
+              <div
+                id="pinned-messages-navigator"
+                className="pinnedNavigator"
+                aria-label="Pinned message navigation"
+              >
+                <button
+                  type="button"
+                  className="pinnedNavArrow"
+                  aria-label="Previous pinned message"
+                  onClick={() => handleNavigatePinnedMessages("up")}
+                  disabled={pinnedCount === 0}
+                >
+                  ↑
+                </button>
+                <span className="pinnedNavigatorCount" aria-live="polite">
+                  {pinnedCount === 0
+                    ? "0 pinned"
+                    : `${currentPinnedIndex + 1}/${pinnedCount} pinned`}
+                </span>
+                <button
+                  type="button"
+                  className="pinnedNavArrow"
+                  aria-label="Next pinned message"
+                  onClick={() => handleNavigatePinnedMessages("down")}
+                  disabled={pinnedCount === 0}
+                >
+                  ↓
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              className="headerPinnedButton"
+              aria-label="Pinned Messages"
+              aria-expanded={isPinnedNavigatorOpen}
+              aria-controls="pinned-messages-navigator"
+              onClick={handleTogglePinnedNavigator}
+            >
+              <img
+                src={pinMessageIcon}
+                alt=""
+                aria-hidden="true"
+                className="headerPinnedIcon"
+              />
+            </button>
+          </div>
+        </header>
+
+        <section className="conversation" aria-label="Chat history">
+          {messages.map((message) => (
+            <article key={message.id} className={`messageRow ${message.role}`}>
+              {message.role === "assistant" && (
+                <div className="messageAvatar">A</div>
+              )}
+              <div className="messageColumn">
+                <div
+                  className={`messageBubble ${message.role} ${
+                    isPinnedNavigatorOpen &&
+                    message.role === "assistant" &&
+                    message.id === currentPinnedMessageId
+                      ? "pinnedTarget"
+                      : ""
+                  }`}
+                  ref={
+                    message.role === "assistant"
+                      ? (element) => {
+                          if (element) {
+                            messageRefs.current[message.id] = element;
+                          } else {
+                            delete messageRefs.current[message.id];
+                          }
+                        }
+                      : undefined
+                  }
+                >
+                  {message.role === "assistant" && (
+                    <button
+                      type="button"
+                      className={`pinMessageButton ${
+                        pinnedMessageIds.includes(message.id) ? "active" : ""
+                      }`}
+                      aria-label={
+                        pinnedMessageIds.includes(message.id)
+                          ? "Unpin message"
+                          : "Pin message"
+                      }
+                      aria-pressed={pinnedMessageIds.includes(message.id)}
+                      onClick={() => handleTogglePinnedMessage(message.id)}
+                    >
+                      <img
+                        src={pinMessageIcon}
+                        alt=""
+                        aria-hidden="true"
+                        className="pinMessageIcon"
+                      />
+                    </button>
+                  )}
+                  {message.role === "assistant" && !voiceMode && (
+                    <button
+                      type="button"
+                      className={`speakMessageButton ${
+                        playingMessageId === message.id ? "active" : ""
+                      }`}
+                      aria-label="Play this reply aloud"
+                      onClick={() => handlePlayMessage(message)}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="speakMessageIcon"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4.03v8.06A4.5 4.5 0 0 0 16.5 12zM14 3.23v2.06a7 7 0 0 1 0 13.42v2.06a9 9 0 0 0 0-17.54z"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                  {message.text}
+                </div>
+                <div className="messageTime">{message.time}</div>
+              </div>
+            </article>
+          ))}
+          <div ref={conversationEndRef} />
+        </section>
+
+        {isReviewingSavedChat && (
+          <p className="reviewModeNotice" aria-live="polite">
+            This is a saved conversation in read only mode. Start a new chat to
+            continue messaging.
+          </p>
+        )}
+
+        {voiceMode ? (
+          <section className="voiceComposer" aria-label="Voice mode">
+            <span className={`voiceComposerDot ${voiceStatus}`} aria-hidden="true" />
+            <span className="voiceComposerText" aria-live="polite">
+              {voiceStatus === "listening" && "Listening… speak now"}
+              {voiceStatus === "transcribing" && "Transcribing…"}
+              {voiceStatus === "thinking" && "Thinking…"}
+              {voiceStatus === "speaking" && "Speaking…"}
+              {voiceStatus === "idle" && "Voice mode active"}
+            </span>
+            <button
+              type="button"
+              className="voiceStopButton"
+              onClick={handleToggleVoiceMode}
+            >
+              Stop voice mode
+            </button>
+          </section>
+        ) : (
+          <section className="composerRow" aria-label="Compose message">
+            <div className="composerField">
+              <input
+                type="text"
+                placeholder={
+                  isReviewingSavedChat
+                    ? "Review mode: Start a new chat to continue..."
+                    : "Ask a question or type a message..."
+                }
+                aria-label="Write a message"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleComposerKeyDown}
+                disabled={isReviewingSavedChat || isSending}
+              />
+              <button
+                type="button"
+                className="sendButton"
+                aria-label="Send message"
+                onClick={handleSend}
+                disabled={isReviewingSavedChat || isSending}
+              >
+                ➤
+              </button>
+            </div>
+          </section>
+        )}
+      </main>
+
+      <aside id="rightaside" className="rightAsidePanel" aria-label="Options">
+        <div className={`rightAsideHead ${isAsideOpen ? "open" : "collapsed"}`}>
+          {isAsideOpen && <h3>Options</h3>}
+
+          <button
+            type="button"
+            className="rightAsideToggleButton"
+            aria-label={
+              isAsideOpen ? "Collapse right sidebar" : "Expand right sidebar"
+            }
+            aria-expanded={isAsideOpen}
+            aria-controls="rightaside-content"
+            onClick={() => setIsAsideOpen((currentValue) => !currentValue)}
+          >
+            <img
+              src={sidebarIcon}
+              alt=""
+              aria-hidden="true"
+              className="rightAsideToggleIcon"
+            />
+          </button>
+        </div>
+
+        <div
+          id="rightaside-content"
+          className={`rightAsideContent ${isAsideOpen ? "open" : "collapsed"}`}
+        >
+          {isSavedChatsOpen ? (
+            <section
+              className="savedChatsView"
+              aria-label="Saved Conversations"
+            >
+              <div className="savedChatsViewHeader">
+                <h4>Saved Conversations</h4>
+                <button
+                  type="button"
+                  className="savedChatsCloseButton"
+                  aria-label="Back to options"
+                  onClick={() => setIsSavedChatsOpen(false)}
+                >
+                  <img
+                    src={leftArrowIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="savedChatsCloseIcon"
+                  />
+                </button>
+              </div>
+
+              <div id="saved-conversations-list" className="savedChatsList">
+                {savedChats.length === 0 ? (
+                  <p className="savedChatsEmpty">No saved conversations yet.</p>
+                ) : (
+                  savedChats.map((savedChat) => (
+                    <div key={savedChat.id} className="savedChatRow">
+                      <button
+                        type="button"
+                        className="savedChatItem"
+                        onClick={() => handleLoadSavedChat(savedChat)}
+                        aria-label={`Load ${savedChat.title}`}
+                        title={savedChat.title}
+                      >
+                        <span className="savedChatTitle">
+                          {savedChat.title}
+                        </span>
+                        <span className="savedChatMeta">
+                          {savedChat.savedAt} • {savedChat.summary}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="savedChatDeleteButton"
+                        onClick={() => handleRequestDeleteSavedChat(savedChat)}
+                        aria-label={`Delete ${savedChat.title}`}
+                      >
+                        <img
+                          src={trashBinIcon}
+                          alt=""
+                          aria-hidden="true"
+                          className="savedChatDeleteIcon"
+                        />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          ) : isHelpOpen ? (
+            <section className="helpView" aria-label="Help">
+              <div className="helpViewHeader">
+                <h4>Help</h4>
+                <button
+                  type="button"
+                  className="helpCloseButton"
+                  aria-label="Back to options"
+                  onClick={() => setIsHelpOpen(false)}
+                >
+                  <img
+                    src={leftArrowIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="helpCloseIcon"
+                  />
+                </button>
+              </div>
+            </section>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="newChatButton"
+                aria-label="New Chat"
+                onClick={handleStartNewChat}
+              >
+                New Chat
+              </button>
+              <button
+                type="button"
+                className="savedChatsButton"
+                aria-label="Saved Chats"
+                aria-expanded={isSavedChatsOpen}
+                aria-controls="saved-conversations-list"
+                onClick={() => setIsSavedChatsOpen(true)}
+              >
+                Saved Conversations
+              </button>
+              <button
+                type="button"
+                className="knowledgeGraphButton"
+                aria-label="Knowledge Graph"
+              >
+                Knowledge Graph
+              </button>
+              <button
+                type="button"
+                className="helpButton"
+                aria-expanded={isHelpOpen}
+                aria-label="Help"
+                onClick={() => setIsHelpOpen(true)}
+              >
+                Help
+              </button>
+            </>
+          )}
+        </div>
+      </aside>
+
+      {pendingDeleteSavedChat && (
+        <div className="saveTitleModalOverlay" role="presentation">
+          <div
+            className="saveTitleModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-chat-heading"
+          >
+            <h3 id="delete-chat-heading">Delete Saved Conversation?</h3>
+            <p className="saveTitleHint">
+              Do you really want to delete "{pendingDeleteSavedChat.title}"?
+            </p>
+            <div className="saveTitleActions">
+              <button
+                type="button"
+                className="saveTitleCancelButton"
+                onClick={handleCancelDeleteSavedChat}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="deleteConfirmButton"
+                onClick={handleConfirmDeleteSavedChat}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;

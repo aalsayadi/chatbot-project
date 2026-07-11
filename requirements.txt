@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+openai
+transformers
+torch
+sentence-transformers
+numpy
+opencv-python
+mediapipe
+kokoro
+soundfile
+spacy>=3.8.14,<4.0.0
+faster-whisper
+silero-vad
+sounddevice
