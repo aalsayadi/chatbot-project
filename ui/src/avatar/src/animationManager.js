@@ -6,6 +6,30 @@ let mixer;
 let animations = {};
 let activeAction = null;
 
+function prepareSpeakingClip(clip) {
+    if (!clip || !clip.duration) return clip;
+
+    const trimmedDuration = Math.max(0.8, clip.duration * 0.92);
+    const fps = clip.fps || 30;
+    const endFrame = Math.max(1, Math.floor(trimmedDuration * fps));
+
+    const subClip = THREE.AnimationUtils.subclip(
+        clip,
+        "speaking_trimmed",
+        0,
+        endFrame,
+        fps
+    );
+
+    subClip.tracks = (subClip.tracks || []).filter((track) => {
+        const trackName = (track && track.name) || "";
+        return !/(head|neck|eye)/i.test(trackName);
+    });
+
+    subClip.duration = trimmedDuration;
+    return subClip;
+}
+
 export async function loadAnimations(vrm) {
     // Clips are retargeted to a specific VRM skeleton, so drop any previously
     // loaded clips when (re)loading for a new persona model.
@@ -44,9 +68,10 @@ export async function loadAnimations(vrm) {
 
         // Retargeting auf das VRM-Humanoid-Skelett
         const clip = createVRMAnimationClip(vrmAnimation, vrm);
+        const preparedClip = name === "speaking" ? prepareSpeakingClip(clip) : clip;
 
-        animations[name] = clip;
-        console.log("Loaded:", name, clip);
+        animations[name] = preparedClip;
+        console.log("Loaded:", name, preparedClip);
     }
 }
 
@@ -62,25 +87,29 @@ export function createMixer(root) {
     return mixer;
 }
 
-export function playAnimation(name, fadeDuration = 0.2) {
+export function playAnimation(name, fadeDuration = 0.3) {
     const clip = animations[name];
 
     if (!mixer || !clip) {
-        console.warn("Animation nicht abspielbar:", name, { mixer: !!mixer, clip: !!clip });
+        console.warn("Animation nicht abspielbar:", name);
         return null;
     }
 
-    if (activeAction) {
-        activeAction.fadeOut(fadeDuration);
-        activeAction.stop();
+    const previousAction = activeAction;
+    const newAction = mixer.clipAction(clip);
+
+    newAction.reset();
+    newAction.enabled = true;
+    newAction.setEffectiveTimeScale(1);
+    newAction.setEffectiveWeight(1);
+    newAction.play();
+
+    if (previousAction && previousAction !== newAction) {
+        previousAction.crossFadeTo(newAction, fadeDuration, true);
     }
 
-    const action = mixer.clipAction(clip).reset();
-    action.fadeIn(fadeDuration);
-    action.play();
-    activeAction = action;
-
-    return action;
+    activeAction = newAction;
+    return newAction;
 }
 
 export function updateAnimations(deltaTime) {

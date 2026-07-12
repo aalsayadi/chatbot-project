@@ -59,8 +59,8 @@ export async function initAvatar(container, initialVrmPath = DEFAULT_VRM_PATH) {
         box.getCenter(center);
 
         const visibleHeight = 1.0;
-        const yOffset = 1.0;
-        const zOffset = 1.5;
+        const yOffset = 1.05;
+        const zOffset = 1.2;
 
         camera.position.set(center.x, center.y + 0.2, center.z + zOffset);
         camera.lookAt(center.x, center.y - visibleHeight / 2 + yOffset, center.z);
@@ -88,13 +88,16 @@ export async function initAvatar(container, initialVrmPath = DEFAULT_VRM_PATH) {
         if (swapping) return;
         swapping = true;
         try {
-            await swapAvatar(scene, vrmPath);
-            vrm = getCurrentVrm();
+            const nextVrm = await swapAvatar(scene, vrmPath);
+            vrm = nextVrm;
             if (!vrm) return;
+
+            vrm.scene.visible = false;
             await loadAnimations(vrm);   // re-retarget clips onto new skeleton
             createMixer(vrm.scene);      // fresh mixer for the new skeleton
             frameAvatar(vrm);
             setState("idle");
+            vrm.scene.visible = true;
         } finally {
             swapping = false;
         }

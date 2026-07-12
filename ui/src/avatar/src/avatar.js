@@ -7,7 +7,9 @@ let currentVrm = null;
 // Default persona model; overridable via the vrmPath argument.
 export const DEFAULT_VRM_PATH = "/AvatarVRM.vrm";
 
-export function loadAvatar(scene, vrmPath = DEFAULT_VRM_PATH) {
+export function loadAvatar(scene, vrmPath = DEFAULT_VRM_PATH, options = {}) {
+    const { visible = true } = options;
+
     return new Promise((resolve, reject) => {
         const loader = new GLTFLoader();
 
@@ -21,6 +23,7 @@ export function loadAvatar(scene, vrmPath = DEFAULT_VRM_PATH) {
             (gltf) => {
                 currentVrm = gltf.userData.vrm;
                 scene.add(currentVrm.scene);
+                currentVrm.scene.visible = visible;
                 currentVrm.scene.rotation.y = 0;
                 console.log("VRM loaded:", vrmPath);
                 resolve(currentVrm);
@@ -62,8 +65,17 @@ export function unloadAvatar(scene) {
  * the one at `vrmPath`. Returns the newly loaded VRM.
  */
 export async function swapAvatar(scene, vrmPath) {
-    unloadAvatar(scene);
-    return loadAvatar(scene, vrmPath);
+    const previousVrm = currentVrm;
+    const nextVrm = await loadAvatar(scene, vrmPath, { visible: false });
+
+    if (previousVrm && previousVrm.scene !== nextVrm.scene) {
+        scene.remove(previousVrm.scene);
+        VRMUtils.deepDispose(previousVrm.scene);
+    }
+
+    currentVrm = nextVrm;
+    nextVrm.scene.visible = true;
+    return nextVrm;
 }
 
 export function getCurrentVrm() {

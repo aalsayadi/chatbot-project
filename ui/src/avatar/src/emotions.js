@@ -80,7 +80,7 @@ export function updateLipSync(deltaTime) {
     const manager = vrm.expressionManager;
     lipSyncTimer += deltaTime;
 
-    const openAmount = 0.2 + 0.35 * Math.abs(Math.sin(lipSyncTimer * 4));
+    const openAmount = 0.2 + 0.35 * Math.abs(Math.sin(lipSyncTimer * 6));
     const shapeAmount = 0.1 + 0.2 * Math.abs(Math.sin(lipSyncTimer * 10 + 0.5));
 
     const mouthShapes = [

@@ -27,26 +27,26 @@ export function updateIdle(deltaTime) {
 
     if(state === "idle"){
 
-        vrm.scene.rotation.x =
-            Math.sin(t * 0.4) * 0.02;
+       // vrm.scene.rotation.x =
+         //   Math.sin(t * 0.4) * 0.02;
 
     }
 
     if(state === "listening"){
 
-        vrm.scene.rotation.x =
-            Math.sin(t * 1.5) * 0.05;
+       // vrm.scene.rotation.x =
+         //   Math.sin(t * 1.5) * 0.05;
     }
 
     if(state === "thinking"){
 
-        vrm.scene.rotation.z =
-            Math.sin(t * 0.5) * 0.08;
+       // vrm.scene.rotation.z =
+         //   Math.sin(t * 0.5) * 0.08;
     }
 
     if(state === "speaking"){
 
-        vrm.scene.rotation.y =
-            Math.sin(t * 0.8) * 0.05;
+       // vrm.scene.rotation.y =
+         //   Math.sin(t * 0.8) * 0.05;
     }
 }
