@@ -5,6 +5,9 @@ import pinMessageIcon from "../assets/icons/pinMessage.svg";
 import saveChatIcon from "../assets/icons/saveChat.svg";
 import trashBinIcon from "../assets/icons/trashBin.svg";
 import leftArrowIcon from "../assets/icons/leftArrow.svg";
+import newChatIcon from "../assets/icons/newChat.svg";
+import knowledgeGraphIcon from "../assets/icons/knowledgeGraph.svg";
+import helpIcon from "../assets/icons/help.svg";
 
 const initialMessages = [
   {
@@ -53,10 +56,13 @@ function App() {
   const [savedChats, setSavedChats] = useState([]);
   const [isSaveTitleModalOpen, setIsSaveTitleModalOpen] = useState(false);
   const [saveTitleDraft, setSaveTitleDraft] = useState("");
+  const [isNewChatPromptOpen, setIsNewChatPromptOpen] = useState(false);
+  const [startNewChatAfterSave, setStartNewChatAfterSave] = useState(false);
   const [pendingDeleteSavedChat, setPendingDeleteSavedChat] = useState(null);
   const [activeSavedChatId, setActiveSavedChatId] = useState(null);
   const [isSavedChatsOpen, setIsSavedChatsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
   const [isPinnedNavigatorOpen, setIsPinnedNavigatorOpen] = useState(false);
   const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
   const messageRefs = useRef({});
@@ -292,6 +298,7 @@ function App() {
   }, [pinnedCount]);
 
   const handleSaveChat = () => {
+    setStartNewChatAfterSave(false);
     setSaveTitleDraft("");
     setIsSaveTitleModalOpen(true);
   };
@@ -327,11 +334,26 @@ function App() {
     setSavedChats((previousChats) => [newSavedChat, ...previousChats]);
     setIsSaveTitleModalOpen(false);
     setSaveTitleDraft("");
+
+    if (startNewChatAfterSave) {
+      setStartNewChatAfterSave(false);
+      setMessages([]);
+      setDraft("");
+      setPinnedMessageIds([]);
+      setIsPinnedNavigatorOpen(false);
+      setCurrentPinnedIndex(0);
+      setIsMicActive(false);
+      setActiveSavedChatId(null);
+      setIsSavedChatsOpen(false);
+      setIsHelpOpen(false);
+      setIsKnowledgeGraphOpen(false);
+    }
   };
 
   const handleCancelSaveChat = () => {
     setIsSaveTitleModalOpen(false);
     setSaveTitleDraft("");
+    setStartNewChatAfterSave(false);
   };
 
   const handleLoadSavedChat = (savedChat) => {
@@ -343,9 +365,10 @@ function App() {
     setIsPinnedNavigatorOpen(false);
     setIsSavedChatsOpen(false);
     setIsHelpOpen(false);
+    setIsKnowledgeGraphOpen(false);
   };
 
-  const handleStartNewChat = () => {
+  const handleExecuteNewChat = () => {
     setMessages([]);
     setDraft("");
     setPinnedMessageIds([]);
@@ -355,6 +378,48 @@ function App() {
     setActiveSavedChatId(null);
     setIsSavedChatsOpen(false);
     setIsHelpOpen(false);
+    setIsKnowledgeGraphOpen(false);
+  };
+
+  const handleStartNewChat = () => {
+    setIsNewChatPromptOpen(true);
+  };
+
+  const handleCancelNewChatPrompt = () => {
+    setIsNewChatPromptOpen(false);
+  };
+
+  const handleStartNewChatWithoutSave = () => {
+    setIsNewChatPromptOpen(false);
+    handleExecuteNewChat();
+  };
+
+  const handleSaveAndStartNewChat = () => {
+    setIsNewChatPromptOpen(false);
+    setStartNewChatAfterSave(true);
+    setSaveTitleDraft("");
+    setIsSaveTitleModalOpen(true);
+  };
+
+  const handleOpenSavedChats = () => {
+    setIsSavedChatsOpen(true);
+    setIsHelpOpen(false);
+    setIsKnowledgeGraphOpen(false);
+    setIsAsideOpen(true);
+  };
+
+  const handleOpenHelp = () => {
+    setIsHelpOpen(true);
+    setIsSavedChatsOpen(false);
+    setIsKnowledgeGraphOpen(false);
+    setIsAsideOpen(true);
+  };
+
+  const handleOpenKnowledgeGraph = () => {
+    setIsKnowledgeGraphOpen(true);
+    setIsSavedChatsOpen(false);
+    setIsHelpOpen(false);
+    setIsAsideOpen(true);
   };
 
   const handleDeleteSavedChat = (savedChatId) => {
@@ -660,6 +725,45 @@ function App() {
         </div>
       )}
 
+      {isNewChatPromptOpen && (
+        <div className="saveTitleModalOverlay" role="presentation">
+          <div
+            className="saveTitleModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-chat-confirm-heading"
+          >
+            <h3 id="new-chat-confirm-heading">Start New Chat?</h3>
+            <p className="saveTitleHint">
+              Do you want to save your current chat before starting a new one?
+            </p>
+            <div className="saveTitleActions">
+              <button
+                type="button"
+                className="saveTitleCancelButton"
+                onClick={handleCancelNewChatPrompt}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="deleteConfirmButton"
+                onClick={handleStartNewChatWithoutSave}
+              >
+                New Chat Without Saving
+              </button>
+              <button
+                type="button"
+                className="saveTitleConfirmButton"
+                onClick={handleSaveAndStartNewChat}
+              >
+                Save And Start New Chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <aside id="rightaside" className="rightAsidePanel" aria-label="Options">
         <div className={`rightAsideHead ${isAsideOpen ? "open" : "collapsed"}`}>
           {isAsideOpen && <h3>Options</h3>}
@@ -682,6 +786,63 @@ function App() {
             />
           </button>
         </div>
+
+        {!isAsideOpen && (
+          <div className="collapsedAsideActions" aria-label="Quick options">
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="New Chat"
+              onClick={handleStartNewChat}
+            >
+              <img
+                src={newChatIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Saved Conversations"
+              onClick={handleOpenSavedChats}
+            >
+              <img
+                src={saveChatIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Knowledge Graph"
+              onClick={handleOpenKnowledgeGraph}
+            >
+              <img
+                src={knowledgeGraphIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Help"
+              onClick={handleOpenHelp}
+            >
+              <img
+                src={helpIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+          </div>
+        )}
 
         <div
           id="rightaside-content"
@@ -805,6 +966,27 @@ function App() {
                 </li>
               </ul>
             </section>
+          ) : isKnowledgeGraphOpen ? (
+            <section className="helpView" aria-label="Knowledge Graph">
+              <div className="helpViewHeader">
+                <h4>Knowledge Graph</h4>
+                <button
+                  type="button"
+                  className="helpCloseButton"
+                  aria-label="Back to options"
+                  onClick={() => setIsKnowledgeGraphOpen(false)}
+                >
+                  <img
+                    src={leftArrowIcon}
+                    alt=""
+                    aria-hidden="true"
+                    className="helpCloseIcon"
+                  />
+                </button>
+              </div>
+
+              <p className="helpIntro">Knowledge Graph contentg here.</p>
+            </section>
           ) : (
             <>
               <button
@@ -821,7 +1003,7 @@ function App() {
                 aria-label="Saved Chats"
                 aria-expanded={isSavedChatsOpen}
                 aria-controls="saved-conversations-list"
-                onClick={() => setIsSavedChatsOpen(true)}
+                onClick={handleOpenSavedChats}
               >
                 Saved Conversations
               </button>
@@ -829,6 +1011,7 @@ function App() {
                 type="button"
                 className="knowledgeGraphButton"
                 aria-label="Knowledge Graph"
+                onClick={handleOpenKnowledgeGraph}
               >
                 Knowledge Graph
               </button>
@@ -837,7 +1020,7 @@ function App() {
                 className="helpButton"
                 aria-expanded={isHelpOpen}
                 aria-label="Help"
-                onClick={() => setIsHelpOpen(true)}
+                onClick={handleOpenHelp}
               >
                 Help
               </button>
