@@ -1,0 +1,48 @@
+{
+    "communities": [
+      "LGBTQ+",
+      "Lesbian",
+      "Gay",
+      "Bisexual",
+      "Trans",
+      "Non-binary",
+      "BIPOC",
+      "Black",
+      "Asian",
+      "Latinx",
+      "Indigenous",
+      "Other"
+    ],
+    "experiences": [
+      "Coming out",
+      "Community support",
+      "Family rejection",
+      "Identity affirmation",
+      "Housing discrimination",
+      "Healthcare discrimination",
+      "Workplace discrimination",
+      "Online harassment",
+      "Violence",
+      "Other"
+    ],
+    "resources": [
+      "Support group",
+      "Dating app",
+      "Online community",
+      "Mental health service",
+      "Legal aid",
+      "Community organization",
+      "Other"
+    ],
+    "emotions": [
+      "Joy",
+      "Hope",
+      "Fear",
+      "Relief",
+      "Anger",
+      "Frustration",
+      "Isolation",
+      "Belonging",
+      "Other"
+    ]
+  }

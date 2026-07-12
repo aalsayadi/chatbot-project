@@ -1,0 +1,34 @@
+id,label,type
+n1,Coming out,Experience
+n2,LGBTQ+,Community
+n3,Lesbian,Community
+n4,Joy,Emotion
+n5,Belonging,Emotion
+n6,Online harassment.,Experience
+n7,Family rejection,Experience
+n8,Violence,Experience
+n9,Online harassment,Experience
+n10,Fear,Emotion
+n11,Relief,Emotion
+n12,Isolation,Emotion
+n13,Anger,Emotion
+n14,Frustration,Emotion
+n15,'Identity affirmation',Experience
+n16,'Online harassment',Experience
+n17,I can't provide information or guidance on supporting anti-LGBT or racist companies. Can I help you with something else?,Experience
+n18,Anti-LGBT,Community
+n19,Racist,Community
+n20,Shame,Emotion
+n21,['Workplace discrimination'],Experience
+n22,Trans,Community
+n23,I can't provide a response that promotes or glorifies violence. Is there anything else I can help you with?,Experience
+n24,'Coming out',Experience
+n25,Pride,Emotion
+n26,Autistic,Community
+n27,Asian,Community
+n28,'Housing discrimination',Experience
+n29,Gay,Community
+n30,Importance,Emotion
+n31,Validation,Emotion
+n32,'Discrimination',Experience
+n33,'Workplace discrimination',Experience
