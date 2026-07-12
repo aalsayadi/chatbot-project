@@ -12,9 +12,6 @@ ways:
 Both share the same backend logic (LLM, memory, sentiment, prompt building,
 TTS, and speech-to-text).
 
-> Includes an interactive **knowledge graph** built from a social-media dataset
-> (see the [Knowledge graph](#knowledge-graph) section).
-
 ## Features
 
 - **Local LLM** via [Ollama](https://ollama.com) (`llama3.1`) — no API key or
@@ -31,9 +28,8 @@ TTS, and speech-to-text).
   streams microphone audio to the backend, which uses **Silero VAD** for
   end-of-speech detection and **faster-whisper** for transcription.
 - **Automatic conversation saving** with LLM-generated titles.
-- **Knowledge graph** — an interactive graph (Cosmograph) of concepts
-  (Communities / Experiences / Emotions) built from a social-media dataset;
-  click a node to see its source posts. Opened from the sidebar.
+- **Knowledge graph** — an interactive Cosmograph view of concepts
+  (Communities / Experiences / Emotions) built from a social-media dataset.
 
 ## Architecture
 
@@ -51,6 +47,11 @@ TTS, and speech-to-text).
 
 The web UI (Vite) proxies `/api/*` and `/ws/*` to the FastAPI server, so the
 frontend uses relative URLs and there is no CORS setup in development.
+
+The **knowledge graph** is a frontend-only view: it reads prebuilt data
+(`public/nodes.csv`, `edges.csv`, `posts.json`) and renders it in the browser,
+so it doesn't touch the backend. That data is produced offline by the numbered
+pipeline scripts in `scripts/`.
 
 ## Project structure
 
@@ -161,6 +162,8 @@ Open the URL Vite prints (default `http://localhost:5173`).
   replies aloud, and it listens again. Works in Chrome, Firefox, Safari, Edge.
 - **Personas:** the Male / Female / Robot buttons swap both the avatar model
   and the voice.
+- **Knowledge graph:** click **Knowledge Graph** in the Options sidebar to open
+  the concept graph; click a node to see its source posts.
 
 The first voice request downloads the faster-whisper "base" model (~140 MB)
 and the Silero VAD weights; subsequent runs are cached.
@@ -174,30 +177,6 @@ python main.py
 Choose text or voice mode at the prompt. In voice mode, speech is captured
 with Silero VAD endpointing and transcribed with faster-whisper. Type/say
 `exit` or `quit` to end.
-
-## Knowledge graph
-
-Click **Knowledge Graph** in the web app's Options sidebar to open a full-screen
-interactive graph of concepts — Communities, Experiences, and Emotions — with a
-legend and a side panel. Clicking a node lists the source posts for that concept.
-
-The graph is rendered from `public/nodes.csv`, `public/edges.csv`, and
-`public/posts.json` using [Cosmograph](https://cosmograph.app/). Those files are
-produced by the offline pipeline in `scripts/`, run in order (needs Ollama
-running, plus `pandas` and `ollama` from `requirements.txt`):
-
-```bash
-python scripts/01_prepare_dataset.py     # clean the raw dataset
-python scripts/02_extract_entities.py    # extract entities (via the LLM)
-python scripts/03_normalize_entities.py  # normalize against ontology/categories.json
-python scripts/04_build_graph.py         # emit data/graph/{nodes,edges,posts}
-```
-
-After rebuilding, copy the outputs into `public/` so the web app picks them up:
-
-```bash
-cp data/graph/nodes.csv data/graph/edges.csv data/graph/posts.json public/
-```
 
 ## Backend API reference
 
