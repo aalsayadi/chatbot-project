@@ -12,8 +12,8 @@ ways:
 Both share the same backend logic (LLM, memory, sentiment, prompt building,
 TTS, and speech-to-text).
 
-> Knowledge-graph features are a separate, later phase and are intentionally
-> not part of this version.
+> Includes an interactive **knowledge graph** built from a social-media dataset
+> (see the [Knowledge graph](#knowledge-graph) section).
 
 ## Features
 
