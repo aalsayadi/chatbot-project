@@ -183,7 +183,8 @@ legend and a side panel. Clicking a node lists the source posts for that concept
 
 The graph is rendered from `public/nodes.csv`, `public/edges.csv`, and
 `public/posts.json` using [Cosmograph](https://cosmograph.app/). Those files are
-produced by the offline pipeline in `scripts/`, run in order:
+produced by the offline pipeline in `scripts/`, run in order (needs Ollama
+running, plus `pandas` and `ollama` from `requirements.txt`):
 
 ```bash
 python scripts/01_prepare_dataset.py     # clean the raw dataset

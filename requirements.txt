@@ -13,3 +13,7 @@ spacy>=3.8.14,<4.0.0
 faster-whisper
 silero-vad
 sounddevice
+
+# Knowledge-graph pipeline (scripts/01-04); not needed just to run the app
+pandas
+ollama
