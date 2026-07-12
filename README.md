@@ -31,6 +31,9 @@ TTS, and speech-to-text).
   streams microphone audio to the backend, which uses **Silero VAD** for
   end-of-speech detection and **faster-whisper** for transcription.
 - **Automatic conversation saving** with LLM-generated titles.
+- **Knowledge graph** — an interactive graph (Cosmograph) of concepts
+  (Communities / Experiences / Emotions) built from a social-media dataset;
+  click a node to see its source posts. Opened from the sidebar.
 
 ## Architecture
 
@@ -63,6 +66,10 @@ voice/stt.py                  # faster-whisper transcription + Silero VAD (share
 vision/                       # webcam face/emotion setup (not wired into the app)
 requirements.txt
 
+scripts/                      # knowledge-graph pipeline (01_prepare … 04_build_graph)
+ontology/categories.json      # communities / experiences / emotions taxonomy
+data/                         # KG dataset: raw, processed, and graph outputs
+
 public/                       # static assets served at the web root
   *.vrm                       # the three avatar models (male/female/robot)
   vad-capture-worklet.js      # AudioWorklet that captures mic PCM
@@ -74,6 +81,7 @@ ui/src/
   api.js                      # calls to the backend
   voice/voiceSession.js       # mic capture + WebSocket streaming to /ws/transcribe
   avatar/                     # Three.js/VRM avatar module + persona map
+  knowledgeGraph/             # Cosmograph knowledge-graph view
   styles.css
 ```
 
@@ -166,6 +174,29 @@ python main.py
 Choose text or voice mode at the prompt. In voice mode, speech is captured
 with Silero VAD endpointing and transcribed with faster-whisper. Type/say
 `exit` or `quit` to end.
+
+## Knowledge graph
+
+Click **Knowledge Graph** in the web app's Options sidebar to open a full-screen
+interactive graph of concepts — Communities, Experiences, and Emotions — with a
+legend and a side panel. Clicking a node lists the source posts for that concept.
+
+The graph is rendered from `public/nodes.csv`, `public/edges.csv`, and
+`public/posts.json` using [Cosmograph](https://cosmograph.app/). Those files are
+produced by the offline pipeline in `scripts/`, run in order:
+
+```bash
+python scripts/01_prepare_dataset.py     # clean the raw dataset
+python scripts/02_extract_entities.py    # extract entities (via the LLM)
+python scripts/03_normalize_entities.py  # normalize against ontology/categories.json
+python scripts/04_build_graph.py         # emit data/graph/{nodes,edges,posts}
+```
+
+After rebuilding, copy the outputs into `public/` so the web app picks them up:
+
+```bash
+cp data/graph/nodes.csv data/graph/edges.csv data/graph/posts.json public/
+```
 
 ## Backend API reference
 

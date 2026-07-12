@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import sidebarIcon from "../assets/icons/sidebar.svg";
 import microphoneIcon from "../assets/icons/microphone.svg";
 import pinMessageIcon from "../assets/icons/pinMessage.svg";
@@ -8,6 +8,9 @@ import Avatar from "./avatar/Avatar.jsx";
 import { PERSONAS, PERSONA_ORDER, DEFAULT_PERSONA } from "./avatar/personas.js";
 import { sendChat, synthesizeSpeech, generateTitle } from "./api.js";
 import { createVoiceSession } from "./voice/voiceSession.js";
+
+// Cosmograph is a heavy WebGL library; load it only when the graph is opened.
+const KnowledgeGraph = lazy(() => import("./knowledgeGraph/KnowledgeGraph.jsx"));
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -37,6 +40,7 @@ function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isPinnedNavigatorOpen, setIsPinnedNavigatorOpen] = useState(false);
   const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
+  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
 
   // Voice mode: mic input + auto-playing TTS + live transcript.
   const [voiceMode, setVoiceMode] = useState(false);
@@ -1011,6 +1015,7 @@ function App() {
                 type="button"
                 className="knowledgeGraphButton"
                 aria-label="Knowledge Graph"
+                onClick={() => setIsKnowledgeGraphOpen(true)}
               >
                 Knowledge Graph
               </button>
@@ -1056,6 +1061,27 @@ function App() {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isKnowledgeGraphOpen && (
+        <div className="kgOverlay" role="dialog" aria-modal="true" aria-label="Knowledge Graph">
+          <div className="kgHeader">
+            <h3>Knowledge Graph</h3>
+            <button
+              type="button"
+              className="kgCloseButton"
+              aria-label="Close knowledge graph"
+              onClick={() => setIsKnowledgeGraphOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="kgBody">
+            <Suspense fallback={<p className="kgLoading">Loading knowledge graph…</p>}>
+              <KnowledgeGraph />
+            </Suspense>
           </div>
         </div>
       )}
