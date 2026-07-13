@@ -461,16 +461,8 @@ function App() {
         </div>
 
         <div className="avatarStage" aria-hidden="true">
-          <button
-            type="button"
-            className="avatarSelectorDot avatarSelectorDotLeft"
-            aria-label="Choose avatar 2"
-          />
-          <button
-            type="button"
-            className="avatarSelectorDot avatarSelectorDotRight"
-            aria-label="Choose avatar 3"
-          />
+          
+          
           <div className="avatarGlow" />
           <div className="avatarCore">A</div>
         </div>
