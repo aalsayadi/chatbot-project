@@ -84,16 +84,26 @@ input {
   grid-template-columns: minmax(280px, 25vw) minmax(0, 1fr) minmax(260px, 21vw);
 }
 
+.appFrame.micExpanded {
+  grid-template-columns: minmax(460px, 42vw) minmax(0, 1fr) 52px;
+}
+
+.appFrame.rightAsideOpen.micExpanded {
+  grid-template-columns: minmax(460px, 42vw) minmax(0, 1fr) minmax(260px, 21vw);
+}
+
 .avatarPanel {
   background: linear-gradient(180deg, #e8e0f4 0%, #f4f0fa 100%);
   border: 1px solid rgba(143, 123, 178, 0.22);
   border-radius: 24px;
   padding: 22px;
+  padding-bottom: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   box-shadow: var(--shadow-soft);
+  position: relative;
 }
 
 .assistantHead h1 {
@@ -121,6 +131,7 @@ input {
   place-items: center;
 }
 
+
 .avatarGlow {
   position: absolute;
   inset: 0;
@@ -128,7 +139,7 @@ input {
   background: radial-gradient(
     circle,
     rgba(172, 144, 212, 0.45),
-    rgba(255, 255, 255, 0)
+    rgba(111, 47, 47, 0)
   );
 }
 
@@ -145,56 +156,8 @@ input {
   box-shadow: 0 18px 36px rgba(93, 76, 129, 0.36);
 }
 
-/* Container the Three.js/VRM canvas mounts into; clipped to the circle so
-   the VRM can never render outside the purple disc. */
-.avatarCanvas {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: 50%;
-  overflow: hidden;
-  /* Soft disc behind the (transparent) 3D canvas. */
-  background: radial-gradient(circle at 50% 35%, #b9a9e0 0%, #6f5a9f 78%);
-  box-shadow:
-    inset 0 -10px 26px rgba(52, 40, 84, 0.35),
-    0 18px 36px rgba(93, 76, 129, 0.32);
-}
-
-.avatarCanvas canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  /* Belt-and-suspenders: keep the canvas within the rounded clip. */
-  border-radius: 50%;
-}
-
-.personaSwitcher {
-  margin-top: 16px;
-  display: inline-flex;
-  gap: 6px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(124, 104, 155, 0.24);
-}
-
-.personaButton {
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #5c4a7a;
-  background: transparent;
-}
-
-.personaButton.active {
-  color: white;
-  background: radial-gradient(circle at 40% 25%, #9f8ecf, #5f4f87);
-  box-shadow: 0 6px 14px rgba(93, 76, 129, 0.3);
-}
-
 .assistantBubble {
-  margin-top: 28px;
+  margin-top: 36px;
   max-width: 260px;
   padding: 14px;
   border-radius: 18px;
@@ -206,197 +169,69 @@ input {
 }
 
 .assistantFooter {
-  /* Pushed to the bottom of the panel and de-emphasised. */
-  margin-top: auto;
-  padding-top: 16px;
+  margin-top: 0;
   display: block;
-  font-size: 0.68rem;
-  line-height: 1.4;
-  color: #9aa4a0;
-  opacity: 0.85;
-}
-
-/* --- Voice mode UI --------------------------------------------------- */
-.voiceStatus {
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  max-width: 260px;
-}
-
-.voiceStatusPill {
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #5c4a7a;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(124, 104, 155, 0.24);
-}
-
-.voiceStatusPill.listening {
-  color: #b0356f;
-  border-color: rgba(222, 72, 128, 0.4);
-}
-
-.voiceStatusPill.speaking {
-  color: #4a6f5a;
-  border-color: rgba(72, 150, 110, 0.4);
-}
-
-.voiceInterim {
-  margin: 0;
   font-size: 0.9rem;
-  line-height: 1.4;
-  color: #55606a;
-  font-style: italic;
-}
-
-.voiceComposer {
-  margin-top: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: rgba(240, 237, 247, 0.7);
-  border: 1px solid rgba(144, 147, 189, 0.2);
-}
-
-.voiceComposerDot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #9f8ecf;
-  flex: 0 0 auto;
-}
-
-.voiceComposerDot.listening {
-  background: #de4880;
-  animation: micPulse 1.2s ease-out infinite;
-}
-
-.voiceComposerDot.speaking {
-  background: #48966e;
-}
-
-.voiceComposerText {
-  flex: 1;
-  color: var(--ink);
-  font-size: 0.95rem;
-}
-
-.voiceStopButton {
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: white;
-  background: #de4848;
-}
-
-/* Speaker button on assistant replies (text mode). Sits to the LEFT of the
-   pin button (top-right), so the two never overlap on short replies. */
-.speakMessageButton {
+  color: #828c8f;
   position: absolute;
-  top: 8px;
-  right: 38px;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  border: 1px solid rgba(144, 147, 189, 0.22);
-  background: rgba(255, 255, 255, 0.92);
-  color: #6f5a9f;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 0.16s ease,
-    background-color 0.16s ease,
-    border-color 0.16s ease;
+  left: 22px;
+  right: 22px;
+  bottom: 22px;
 }
 
-.messageBubble.assistant:hover .speakMessageButton,
-.speakMessageButton.active {
-  opacity: 1;
-  pointer-events: auto;
+.micErrorNotice {
+  margin: 12px 0 0;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #7d3e3e;
+  background: rgba(255, 235, 235, 0.95);
+  border: 1px solid rgba(198, 107, 107, 0.36);
 }
 
-.speakMessageButton.active {
-  background: rgba(216, 240, 228, 0.95);
-  border-color: rgba(72, 150, 110, 0.42);
-  color: #48966e;
-}
-
-.speakMessageIcon {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-/* Voice-mode toggle -- circular icon-only button using the persona
-   ("switch avatar") purple palette and active gradient. */
 .avatarMicButton {
-  margin-top: 16px;
+  margin-top: 40px;
   width: 56px;
   height: 56px;
   border-radius: 999px;
-  border: 1px solid rgba(124, 104, 155, 0.24);
-  background: rgba(255, 255, 255, 0.72);
-  color: #5c4a7a;
+  border: 0;
+  background: #e7efe9;
+  color: var(--muted);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 0 0 0 rgba(219, 103, 103, 0.35);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .avatarMicButton.active {
+  background: #e07171;
   color: #ffffff;
-  background: radial-gradient(circle at 40% 25%, #9f8ecf, #5f4f87);
-  border-color: transparent;
-  box-shadow: 0 6px 14px rgba(93, 76, 129, 0.3);
+  animation: micPulse 1.2s ease-out infinite;
+}
+
+.avatarMicButton:hover:not(:disabled) {
+  box-shadow: 0 10px 22px rgba(45, 63, 56, 0.18);
+  filter: brightness(1.02);
+}
+
+.avatarMicButton:active:not(:disabled) {
+  filter: brightness(0.99);
 }
 
 .avatarMicButton:focus-visible {
-  outline: 2px solid rgba(123, 105, 177, 0.45);
+  outline: 2px solid rgba(111, 143, 124, 0.45);
   outline-offset: 2px;
 }
 
 .avatarMicButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* The mic icon is a black-stroke SVG loaded via <img>, so tint it with a
-   filter: muted purple-grey by default, white on the active gradient.
-   Scoped to .avatarMicButton to override the legacy .microphoneIcon rule. */
-.avatarMicButton .microphoneIcon {
-  width: 24px;
-  height: 24px;
-  filter: brightness(0) opacity(0.55);
-}
-
-.avatarMicButton.active .microphoneIcon {
-  filter: brightness(0) invert(1);
-}
-
-.voiceError {
-  margin: 10px 0 0;
-  max-width: 240px;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: #b0356f;
-}
-
-.voiceHint {
-  margin: 8px 0 0;
-  font-size: 0.75rem;
-  color: var(--muted);
 }
 
 .statusDot {
@@ -533,6 +368,8 @@ input {
   border: 1px solid rgba(143, 123, 178, 0.22);
   background: linear-gradient(180deg, #eef6f0 0%, #f8fcf9 100%);
   padding: 18px 10px;
+  min-height: calc(100vh - 52px);
+  max-height: calc(100vh - 52px);
   box-shadow: var(--shadow-soft);
   display: flex;
   flex-direction: column;
@@ -629,17 +466,6 @@ input {
   padding: 10px 12px;
   text-align: left;
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rightAsideOptionIcon {
-  width: 16px;
-  height: 16px;
-  display: block;
-  object-fit: contain;
-  flex: 0 0 auto;
 }
 
 .savedChatsList {
@@ -762,7 +588,6 @@ input {
   border-radius: 12px;
   padding: 10px 12px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   text-align: left;
 }
@@ -797,19 +622,11 @@ input {
 .savedChatTitle {
   font-weight: 600;
   color: var(--ink);
-  display: block;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .savedChatMeta {
   font-size: 0.75rem;
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .rightAsideToggleButton {
@@ -1036,8 +853,7 @@ input {
 .messageBubble.assistant {
   background: var(--assistant-bubble);
   border: 1px solid rgba(144, 147, 189, 0.16);
-  /* Reserve room for the two top-right action buttons (speaker + pin). */
-  padding-right: 70px;
+  padding-right: 42px;
 }
 
 .messageBubble.assistant.pinnedTarget {
@@ -1217,6 +1033,11 @@ input {
     padding: 14px;
   }
 
+  .appFrame.micExpanded,
+  .appFrame.rightAsideOpen.micExpanded {
+    grid-template-columns: 1fr;
+  }
+
   .appFrame.rightAsideOpen {
     grid-template-columns: 1fr;
   }
@@ -1250,158 +1071,5 @@ input {
 @media (max-width: 720px) {
   .messageColumn {
     max-width: 90%;
-  }
-}
-
-/* --- Knowledge Graph modal ------------------------------------------- */
-.kgOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  background: #14161c;
-  color: #f2f2f5;
-}
-
-.kgHeader {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.kgHeader h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.kgCloseButton {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f2f2f5;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.kgBody {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-.kgLoading {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.kgLayout {
-  position: absolute;
-  inset: 0;
-}
-
-.kgCanvas {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  right: 320px;
-}
-
-.kgCanvas canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.kgLegend {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  z-index: 5;
-  background: rgba(35, 38, 46, 0.8);
-  padding: 12px 14px;
-  border-radius: 10px;
-  font-size: 0.82rem;
-}
-
-.kgLegendItem {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.kgLegendItem:last-child {
-  margin-bottom: 0;
-}
-
-.kgDot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.kgPanel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 320px;
-  overflow-y: auto;
-  padding: 18px;
-  background: rgba(35, 38, 46, 0.9);
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.kgPanelTitle {
-  margin: 0 0 12px;
-  font-size: 1rem;
-}
-
-.kgPanelHint {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.9rem;
-}
-
-.kgPostList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.kgPostItem {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-@media (max-width: 720px) {
-  .kgCanvas {
-    right: 0;
-    bottom: 45%;
-  }
-  .kgPanel {
-    width: 100%;
-    top: 55%;
-    border-left: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 }

@@ -2,15 +2,21 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import sidebarIcon from "../assets/icons/sidebar.svg";
 import microphoneIcon from "../assets/icons/microphone.svg";
 import pinMessageIcon from "../assets/icons/pinMessage.svg";
+import saveChatIcon from "../assets/icons/saveChat.svg";
 import trashBinIcon from "../assets/icons/trashBin.svg";
 import leftArrowIcon from "../assets/icons/leftArrow.svg";
+import newChatIcon from "../assets/icons/newChat.svg";
+import knowledgeGraphIcon from "../assets/icons/knowledgeGraph.svg";
+import helpIcon from "../assets/icons/help.svg";
 import Avatar from "./avatar/Avatar.jsx";
 import { PERSONAS, PERSONA_ORDER, DEFAULT_PERSONA } from "./avatar/personas.js";
 import { sendChat, synthesizeSpeech, generateTitle } from "./api.js";
 import { createVoiceSession } from "./voice/voiceSession.js";
 
 // Cosmograph is a heavy WebGL library; load it only when the graph is opened.
-const KnowledgeGraph = lazy(() => import("./knowledgeGraph/KnowledgeGraph.jsx"));
+const KnowledgeGraph = lazy(
+  () => import("./knowledgeGraph/KnowledgeGraph.jsx"),
+);
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -35,6 +41,7 @@ function App() {
   const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
   const [savedChats, setSavedChats] = useState([]);
   const [pendingDeleteSavedChat, setPendingDeleteSavedChat] = useState(null);
+  const [isNewChatConfirmOpen, setIsNewChatConfirmOpen] = useState(false);
   const [activeSavedChatId, setActiveSavedChatId] = useState(null);
   const [isSavedChatsOpen, setIsSavedChatsOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
@@ -554,6 +561,7 @@ function App() {
 
   const handleLoadSavedChat = (savedChat) => {
     exitVoiceMode();
+    setIsNewChatConfirmOpen(false);
     setMessages(savedChat.messages);
     messagesRef.current = savedChat.messages;
     setPinnedMessageIds(savedChat.pinnedMessageIds ?? []);
@@ -562,11 +570,13 @@ function App() {
     setIsPinnedNavigatorOpen(false);
     setIsSavedChatsOpen(false);
     setIsHelpOpen(false);
+    setIsKnowledgeGraphOpen(false);
   };
 
-  const handleStartNewChat = () => {
+  const startNewChat = () => {
     exitVoiceMode();
     resetActiveChat();
+    setIsNewChatConfirmOpen(false);
     setMessages([]);
     messagesRef.current = [];
     setDraft("");
@@ -576,7 +586,45 @@ function App() {
     setActiveSavedChatId(null);
     setIsSavedChatsOpen(false);
     setIsHelpOpen(false);
+    setIsKnowledgeGraphOpen(false);
     avatarControlsRef.current?.setState("idle");
+  };
+
+  const handleStartNewChat = () => {
+    const hasConversation = messagesRef.current.length > 0;
+    if (isReviewingSavedChat || hasConversation) {
+      setIsAsideOpen(true);
+      setIsNewChatConfirmOpen(true);
+      return;
+    }
+
+    startNewChat();
+  };
+
+  const handleCancelStartNewChat = () => {
+    setIsNewChatConfirmOpen(false);
+  };
+
+  const handleConfirmStartNewChat = () => {
+    startNewChat();
+  };
+
+  const handleOpenSavedChats = () => {
+    setIsAsideOpen(true);
+    setIsSavedChatsOpen(true);
+    setIsHelpOpen(false);
+  };
+
+  const handleOpenKnowledgeGraph = () => {
+    setIsKnowledgeGraphOpen(true);
+    setIsSavedChatsOpen(false);
+    setIsHelpOpen(false);
+  };
+
+  const handleOpenHelp = () => {
+    setIsAsideOpen(true);
+    setIsHelpOpen(true);
+    setIsSavedChatsOpen(false);
   };
 
   const handleDeleteSavedChat = (savedChatId) => {
@@ -839,7 +887,10 @@ function App() {
 
         {voiceMode ? (
           <section className="voiceComposer" aria-label="Voice mode">
-            <span className={`voiceComposerDot ${voiceStatus}`} aria-hidden="true" />
+            <span
+              className={`voiceComposerDot ${voiceStatus}`}
+              aria-hidden="true"
+            />
             <span className="voiceComposerText" aria-live="polite">
               {voiceStatus === "listening" && "Listening… speak now"}
               {voiceStatus === "transcribing" && "Transcribing…"}
@@ -907,6 +958,63 @@ function App() {
             />
           </button>
         </div>
+
+        {!isAsideOpen && (
+          <div className="collapsedAsideActions" aria-label="Quick options">
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="New Chat"
+              onClick={handleStartNewChat}
+            >
+              <img
+                src={newChatIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Saved Conversations"
+              onClick={handleOpenSavedChats}
+            >
+              <img
+                src={saveChatIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Knowledge Graph"
+              onClick={handleOpenKnowledgeGraph}
+            >
+              <img
+                src={knowledgeGraphIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+            <button
+              type="button"
+              className="collapsedAsideActionButton"
+              aria-label="Help"
+              onClick={handleOpenHelp}
+            >
+              <img
+                src={helpIcon}
+                alt=""
+                aria-hidden="true"
+                className="collapsedAsideActionIcon"
+              />
+            </button>
+          </div>
+        )}
 
         <div
           id="rightaside-content"
@@ -990,6 +1098,45 @@ function App() {
                   />
                 </button>
               </div>
+              <ul className="helpList">
+                <li>
+                  Choosing an assistant: By clicking on the left or right
+                  profile picture of the assistant, you can choose which
+                  assistant you want to talk to.
+                </li>
+                <li>
+                  Sending Messages: Underneath the assistant, you can find the
+                  microphone. It activates by clicking on it. Please speak while
+                  it's pulsating in red. When you have stopped talking click on
+                  it again and verify in the textfield, if the text is correct.
+                  If not, you can edit it and then click the send button on the
+                  right side of the textfield. You can also send a message by
+                  typing it in the textfield and pressing enter or clicking the
+                  send button.
+                </li>
+                <li>
+                  Pinning a Message: You can pin a message from the assistant by
+                  hovering over the message and clicking the pin symbol on the
+                  top right corner that appears when hovering over the
+                  assistant's message. To see all the pinned messages you can
+                  click on the pin symbol on the top right corner of the
+                  Conversation panel (left from the save button). You can
+                  navigate through the pinned messages by clicking on the up and
+                  down arrows next to the pin symbol.
+                </li>
+                <li>
+                  Saving a Chat: You can save a chat by clicking the floppy
+                  disk/save button to the top right corner of the
+                  Conversation-panel
+                </li>
+                <li>
+                  Options: you can open a new chat by clicking the "New Chat"
+                  button in the right sidebar. You can access saved
+                  conversations by clicking the "Saved Conversations" button
+                  underneath it. You can access the knowledge graph by clicking
+                  the "Knowledge Graph" button underneath it.
+                </li>
+              </ul>
             </section>
           ) : (
             <>
@@ -999,6 +1146,12 @@ function App() {
                 aria-label="New Chat"
                 onClick={handleStartNewChat}
               >
+                <img
+                  src={newChatIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="rightAsideOptionIcon"
+                />
                 New Chat
               </button>
               <button
@@ -1007,16 +1160,28 @@ function App() {
                 aria-label="Saved Chats"
                 aria-expanded={isSavedChatsOpen}
                 aria-controls="saved-conversations-list"
-                onClick={() => setIsSavedChatsOpen(true)}
+                onClick={handleOpenSavedChats}
               >
+                <img
+                  src={saveChatIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="rightAsideOptionIcon"
+                />
                 Saved Conversations
               </button>
               <button
                 type="button"
                 className="knowledgeGraphButton"
                 aria-label="Knowledge Graph"
-                onClick={() => setIsKnowledgeGraphOpen(true)}
+                onClick={handleOpenKnowledgeGraph}
               >
+                <img
+                  src={knowledgeGraphIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="rightAsideOptionIcon"
+                />
                 Knowledge Graph
               </button>
               <button
@@ -1024,14 +1189,54 @@ function App() {
                 className="helpButton"
                 aria-expanded={isHelpOpen}
                 aria-label="Help"
-                onClick={() => setIsHelpOpen(true)}
+                onClick={handleOpenHelp}
               >
+                <img
+                  src={helpIcon}
+                  alt=""
+                  aria-hidden="true"
+                  className="rightAsideOptionIcon"
+                />
                 Help
               </button>
             </>
           )}
         </div>
       </aside>
+
+      {isNewChatConfirmOpen && (
+        <div className="saveTitleModalOverlay" role="presentation">
+          <div
+            className="saveTitleModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-chat-confirm-heading"
+          >
+            <h3 id="new-chat-confirm-heading">Start a new chat?</h3>
+            <p className="saveTitleHint">
+              The current conversation will be automatically saved. Saved
+              conversations are read only. Are you sure you want to leave this
+              conversation and start a new chat?
+            </p>
+            <div className="saveTitleActions">
+              <button
+                type="button"
+                className="saveTitleCancelButton"
+                onClick={handleCancelStartNewChat}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="saveTitleConfirmButton"
+                onClick={handleConfirmStartNewChat}
+              >
+                Start New Chat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDeleteSavedChat && (
         <div className="saveTitleModalOverlay" role="presentation">
@@ -1066,7 +1271,12 @@ function App() {
       )}
 
       {isKnowledgeGraphOpen && (
-        <div className="kgOverlay" role="dialog" aria-modal="true" aria-label="Knowledge Graph">
+        <div
+          className="kgOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Knowledge Graph"
+        >
           <div className="kgHeader">
             <h3>Knowledge Graph</h3>
             <button
@@ -1079,7 +1289,9 @@ function App() {
             </button>
           </div>
           <div className="kgBody">
-            <Suspense fallback={<p className="kgLoading">Loading knowledge graph…</p>}>
+            <Suspense
+              fallback={<p className="kgLoading">Loading knowledge graph…</p>}
+            >
               <KnowledgeGraph />
             </Suspense>
           </div>
