@@ -17,6 +17,7 @@ function App() {
   const [draft, setDraft] = useState("");
   const [persona, setPersona] = useState(DEFAULT_PERSONA);
   const [isSending, setIsSending] = useState(false);
+  const selectedPersona = PERSONAS[persona] ?? PERSONAS[DEFAULT_PERSONA];
   const avatarControlsRef = useRef(null);
   const audioRef = useRef(null);
   const [isAsideOpen, setIsAsideOpen] = useState(true);
@@ -755,7 +756,13 @@ function App() {
           {messages.map((message) => (
             <article key={message.id} className={`messageRow ${message.role}`}>
               {message.role === "assistant" && (
-                <div className="messageAvatar">A</div>
+                <div className="messageAvatar" aria-label={selectedPersona.label}>
+                  <img
+                    src={selectedPersona.avatarImage}
+                    alt={selectedPersona.label}
+                    className="messageAvatarImage"
+                  />
+                </div>
               )}
               <div className="messageColumn">
                 <div

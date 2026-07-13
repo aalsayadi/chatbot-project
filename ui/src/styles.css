@@ -921,10 +921,16 @@ input {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  color: white;
-  font-size: 0.9rem;
-  font-weight: 700;
+  overflow: hidden;
   background: linear-gradient(135deg, #9f8ecf, #6f5a9f);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.messageAvatarImage {
+  width: 120%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .messageColumn {
