@@ -19,6 +19,7 @@ const KnowledgeGraph = lazy(
 );
 
 function App() {
+  const [hasUsedMicOnce, setHasUsedMicOnce] = useState(false);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [persona, setPersona] = useState(DEFAULT_PERSONA);
@@ -417,6 +418,10 @@ function App() {
     setVoiceMode(true);
     setVoiceStatus("listening");
     setIsMicActive(true);
+    if (!hasUsedMicOnce) {
+      setHasUsedMicOnce(true);
+    }
+
     avatarControlsRef.current?.setState("listening");
 
     const session = createVoiceSession({
@@ -656,7 +661,9 @@ function App() {
   };
 
   return (
-    <div className={`appFrame ${isAsideOpen ? "rightAsideOpen" : ""}`}>
+    <div
+      className={`appFrame ${isAsideOpen ? "rightAsideOpen" : ""} ${isMicActive ? "leftAsideMicActive" : ""}`.trim()}
+    >
       <aside className="avatarPanel">
         <div className="assistantHead">
           <div className="assistantBadge">Care Companion</div>
@@ -729,9 +736,12 @@ function App() {
             )}
           </div>
         ) : (
-          <div className="assistantBubble">
-            Hello, I'm here to support you. How can I assist you today?
-          </div>
+          !hasUsedMicOnce &&
+          messages.length === 0 && (
+            <div className="assistantBubble">
+              Hello, I'm here to support you. How can I assist you today?
+            </div>
+          )
         )}
 
         <div className="assistantFooter">
@@ -804,7 +814,10 @@ function App() {
           {messages.map((message) => (
             <article key={message.id} className={`messageRow ${message.role}`}>
               {message.role === "assistant" && (
-                <div className="messageAvatar" aria-label={selectedPersona.label}>
+                <div
+                  className="messageAvatar"
+                  aria-label={selectedPersona.label}
+                >
                   <img
                     src={selectedPersona.avatarImage}
                     alt={selectedPersona.label}
@@ -891,6 +904,11 @@ function App() {
             continue messaging.
           </p>
         )}
+
+        <p className="composerSaveNotice">
+          This conversation will be automatically saved when you start a new
+          chat.
+        </p>
 
         {voiceMode ? (
           <section className="voiceComposer" aria-label="Voice mode">
@@ -1107,38 +1125,41 @@ function App() {
               </div>
               <ul className="helpList">
                 <li>
-                  Choosing an assistant: By clicking on the left or right
-                  profile picture of the assistant, you can choose which
-                  assistant you want to talk to.
+                  <b>Choosing an assistant:</b> Underneath the moving assistant
+                  you can find a row of assistants to choose from. You can
+                  either chose Felix, Lisa or a Atlas to talk to.
                 </li>
                 <li>
-                  Sending Messages: Underneath the assistant, you can find the
-                  microphone. It activates by clicking on it. Please speak while
-                  it's pulsating in red. When you have stopped talking click on
-                  it again and verify in the textfield, if the text is correct.
-                  If not, you can edit it and then click the send button on the
-                  right side of the textfield. You can also send a message by
-                  typing it in the textfield and pressing enter or clicking the
-                  send button.
+                  <b>Sending Messages:</b> Under the row of assistants, you can
+                  find the microphone. It activates by clicking on it. Please
+                  speak while it's pulsating in red. When you have stopped
+                  talking click on it again and verify in the textfield, if the
+                  text is correct. If not, please edit it. Afterwardsclick the
+                  send button on the right side of the textfield to send the
+                  message to the assistant. You can also send a message by
+                  typing it directly in the textfield and pressing enter or
+                  clicking the send button.
                 </li>
                 <li>
-                  Pinning a Message: You can pin a message from the assistant by
-                  hovering over the message and clicking the pin symbol on the
-                  top right corner that appears when hovering over the
-                  assistant's message. To see all the pinned messages you can
-                  click on the pin symbol on the top right corner of the
-                  Conversation panel (left from the save button). You can
+                  <b>Pinning a Message:</b> You can pin a message from the
+                  assistant by clicking the pin symbol on the top right corner
+                  that appears when hovering over the assistant's message. To
+                  see all the pinned messages you can click on the pin symbol on
+                  the top right corner of the Conversation panel. You can
                   navigate through the pinned messages by clicking on the up and
                   down arrows next to the pin symbol.
                 </li>
                 <li>
-                  Saving a Chat: You can save a chat by clicking the floppy
-                  disk/save button to the top right corner of the
-                  Conversation-panel
+                  <b>Saving a Chat:</b> By default, the assistant saves your
+                  conversation automatically, when you end the chat. You end a
+                  chat by opening a "New chat" (+) button. You can access your
+                  saved conversations by clicking on the "Saved Conversations"
+                  button in the right sidebar. You can also delete a saved
+                  conversation by clicking on the trash bin icon next to it.
                 </li>
                 <li>
-                  Options: you can open a new chat by clicking the "New Chat"
-                  button in the right sidebar. You can access saved
+                  <b>Options:</b> you can open a new chat by clicking the "New
+                  Chat" button in the right sidebar. You can access saved
                   conversations by clicking the "Saved Conversations" button
                   underneath it. You can access the knowledge graph by clicking
                   the "Knowledge Graph" button underneath it.

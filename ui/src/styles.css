@@ -72,16 +72,24 @@ input {
 }
 
 .appFrame {
+  --left-aside-width: minmax(280px, 25vw);
+  --right-aside-width: 52px;
   min-height: 100vh;
   padding: 26px;
   display: grid;
-  grid-template-columns: minmax(280px, 25vw) minmax(0, 1fr) 52px;
+  grid-template-columns: var(--left-aside-width) minmax(0, 1fr) var(
+      --right-aside-width
+    );
   gap: 18px;
   transition: grid-template-columns 0.2s ease;
 }
 
 .appFrame.rightAsideOpen {
-  grid-template-columns: minmax(280px, 25vw) minmax(0, 1fr) minmax(260px, 21vw);
+  --right-aside-width: minmax(260px, 21vw);
+}
+
+.appFrame.leftAsideMicActive {
+  --left-aside-width: minmax(467px, 41.667vw);
 }
 
 .avatarPanel {
@@ -360,6 +368,7 @@ input {
   background: radial-gradient(circle at 40% 25%, #9f8ecf, #5f4f87);
   border-color: transparent;
   box-shadow: 0 6px 14px rgba(93, 76, 129, 0.3);
+  animation: micPulse 1.2s ease-out infinite;
 }
 
 .avatarMicButton:focus-visible {
@@ -680,7 +689,8 @@ input {
 
 .helpList {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 0;
+  list-style-position: inside;
   display: grid;
   gap: 8px;
   font-size: 0.82rem;
@@ -690,6 +700,10 @@ input {
 
 .helpList li {
   margin: 0;
+  border: 1px solid rgba(129, 155, 142, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 10px 12px;
 }
 
 .savedChatsViewHeader {
@@ -1123,6 +1137,17 @@ input {
   color: #5b4b3a;
   background: rgba(255, 246, 224, 0.9);
   border: 1px solid rgba(202, 168, 108, 0.35);
+}
+
+.composerSaveNotice {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #5e6f67;
+  background: rgba(233, 241, 236, 0.72);
+  border: 1px solid rgba(125, 158, 139, 0.24);
 }
 
 .composerAction,

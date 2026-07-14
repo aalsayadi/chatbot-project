@@ -1,0 +1,148 @@
+.appFrame.landingPageFrame {
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+}
+
+.landingPagePanel {
+  width: min(100%, 100%);
+  min-height: calc(100vh - 52px);
+  position: relative;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(
+      circle at 12% 20%,
+      rgba(171, 139, 204, 0.14),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 84% 8%,
+      rgba(151, 191, 174, 0.22),
+      transparent 35%
+    ),
+    linear-gradient(180deg, var(--bg-cream) 0%, var(--bg-mist) 100%);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: clamp(22px, 4vw, 56px);
+  padding: clamp(20px, 3vw, 40px);
+}
+
+.landingCopy {
+  width: min(540px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  transform: translateX(clamp(56px, 9vw, 180px));
+}
+
+.landingEyebrow {
+  width: fit-content;
+  margin: 0;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #7e6ea1;
+  background: rgba(232, 227, 245, 0.9);
+  border: 2px solid rgba(143, 123, 178, 0.22);
+}
+
+.landingHeading {
+  margin: 0;
+  font-size: clamp(2.2rem, 4.8vw, 4rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: #23363a;
+}
+
+.landingHeading span {
+  color: #7d6aac;
+}
+
+.landingDescription {
+  margin: 0;
+  max-width: 500px;
+  font-size: clamp(1rem, 1.6vw, 1.35rem);
+  line-height: 1.55;
+  color: #6e7f86;
+}
+
+.landingActions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.landingPageButton {
+  border: none;
+  border-radius: 999px;
+  padding: 13px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: linear-gradient(135deg, #8f7bc8, #7a6ab3);
+  border: 2px solid rgba(54, 44, 85, 0.55);
+}
+
+.landingSecondaryButton {
+  border: 1px solid rgba(131, 115, 179, 0.55);
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #7a6ab3;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.landingPageButton:hover {
+  box-shadow: 0 12px 22px rgba(104, 88, 148, 0.3);
+}
+
+.landingSecondaryButton:hover {
+  box-shadow: 0 10px 20px rgba(104, 88, 148, 0.18);
+}
+
+.screenshotUI {
+  width: min(54%, 940px);
+  height: auto;
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+.landingAuthor {
+  position: absolute;
+  right: clamp(16px, 2.6vw, 30px);
+  bottom: clamp(12px, 2.1vw, 24px);
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(84, 98, 103, 0.88);
+}
+
+@media (max-width: 980px) {
+  .landingPagePanel {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .landingCopy {
+    transform: none;
+  }
+
+  .screenshotUI {
+    width: min(100%, 720px);
+  }
+
+  .landingHeading {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  .landingAuthor {
+    font-size: 0.78rem;
+  }
+}
