@@ -10,8 +10,11 @@ import knowledgeGraphIcon from "../assets/icons/knowledgeGraph.svg";
 import helpIcon from "../assets/icons/help.svg";
 import Avatar from "./avatar/Avatar.jsx";
 import { PERSONAS, PERSONA_ORDER, DEFAULT_PERSONA } from "./avatar/personas.js";
-import { sendChat, synthesizeSpeech, generateTitle } from "./api.js";
-import { createVoiceSession } from "./voice/voiceSession.js";
+import {
+  sendChatStream,
+  synthesizeSpeech,
+  generateTitle,
+} from "./api.js";
 
 // Cosmograph is a heavy WebGL library; load it only when the graph is opened.
 const KnowledgeGraph = lazy(
@@ -29,16 +32,13 @@ function App() {
   const audioRef = useRef(null);
   const [isAsideOpen, setIsAsideOpen] = useState(true);
   const [isMicActive, setIsMicActive] = useState(false);
-  // Voice input now streams mic audio to the backend (Silero VAD +
-  // faster-whisper), so it works in every major browser. Support just needs
-  // getUserMedia + AudioWorklet + WebSocket. Detected synchronously so the
-  // voice button is disabled upfront where those are unavailable.
+  // Web-app voice input uses the browser's built-in Web Speech API
+  // (Chrome/Edge/Safari; not Firefox). Detected synchronously so the voice
+  // button is disabled upfront where it's unavailable.
   const [isSpeechSupported] = useState(
     () =>
       typeof window !== "undefined" &&
-      Boolean(navigator.mediaDevices?.getUserMedia) &&
-      typeof window.AudioWorkletNode !== "undefined" &&
-      typeof window.WebSocket !== "undefined",
+      Boolean(window.SpeechRecognition || window.webkitSpeechRecognition),
   );
   const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
   const [savedChats, setSavedChats] = useState([]);
@@ -60,8 +60,9 @@ function App() {
   const voiceModeRef = useRef(false);
   const isSendingRef = useRef(false);
   const messagesRef = useRef([]);
-  const voiceSessionRef = useRef(null);
-  const submitMessageRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const speechFinalTranscriptRef = useRef("");
+  const handleRecognitionEndRef = useRef(null);
 
   // Auto-save bookkeeping for the current conversation.
   const activeChatIdRef = useRef(null);
@@ -93,47 +94,79 @@ function App() {
     });
   }, [messages]);
 
-  // Tear the voice session down on unmount.
+  // Stop speech recognition on unmount.
   useEffect(() => {
     return () => {
       try {
-        voiceSessionRef.current?.stop();
+        recognitionRef.current?.stop();
       } catch {
         // ignore
       }
-      voiceSessionRef.current = null;
+      recognitionRef.current = null;
     };
   }, []);
 
-  // Called when the backend returns a transcribed utterance during voice mode.
-  const handleVoiceTranscript = (text) => {
-    const spoken = (text || "").trim();
-    setInterimTranscript("");
-    if (!voiceModeRef.current) {
-      return;
+  // Create (lazily, inside a user gesture) the browser SpeechRecognition
+  // instance, or return null if the browser doesn't support the Web Speech API.
+  const ensureRecognition = () => {
+    if (recognitionRef.current) {
+      return recognitionRef.current;
     }
-    if (spoken) {
-      // Stop capturing while we think + speak (avoids capturing our own TTS).
-      voiceSessionRef.current?.pause();
-      submitMessageRef.current?.(spoken, { viaVoice: true });
+    const Ctor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Ctor) {
+      return null;
     }
-    // If empty (VAD misfire), the session keeps listening automatically.
-  };
 
-  const handleVoiceError = (message) => {
-    // Surface connection/permission problems and drop out of voice mode.
-    const lowered = (message || "").toLowerCase();
-    const isMicIssue =
-      lowered.includes("mic") ||
-      lowered.includes("blocked") ||
-      lowered.includes("allowed");
-    setVoiceError(
-      isMicIssue
-        ? "Microphone access is blocked. Allow mic access in your browser to use voice mode."
-        : "Voice input failed. Make sure the backend is running, then try again.",
-    );
-    exitVoiceMode();
-    avatarControlsRef.current?.setState("idle");
+    const recognition = new Ctor();
+    recognition.lang = "en-US";
+    // Non-continuous: each utterance ends on a pause, giving natural
+    // turn-taking (end -> send -> reply -> listen again).
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const piece = event.results[i][0]?.transcript?.trim() ?? "";
+        if (!piece) continue;
+        if (event.results[i].isFinal) {
+          speechFinalTranscriptRef.current = [
+            speechFinalTranscriptRef.current,
+            piece,
+          ]
+            .filter(Boolean)
+            .join(" ");
+        } else {
+          interim = [interim, piece].filter(Boolean).join(" ");
+        }
+      }
+      const combined = [speechFinalTranscriptRef.current, interim]
+        .filter(Boolean)
+        .join(" ");
+      setInterimTranscript(combined);
+    };
+
+    recognition.onend = () => {
+      setIsMicActive(false);
+      // Latest handler via ref, so it sees current state.
+      handleRecognitionEndRef.current?.();
+    };
+
+    recognition.onerror = (event) => {
+      setIsMicActive(false);
+      const err = event?.error;
+      if (err === "not-allowed" || err === "service-not-allowed") {
+        setVoiceError(
+          "Microphone access is blocked. Allow mic access in your browser to use voice mode.",
+        );
+        exitVoiceMode();
+        avatarControlsRef.current?.setState("idle");
+      }
+    };
+
+    recognitionRef.current = recognition;
+    return recognition;
   };
 
   const pinnedAssistantMessageIds = messages
@@ -171,16 +204,25 @@ function App() {
     }
   };
 
-  // Resume the streaming voice session to listen for the next utterance.
+  // Start listening for the next utterance via browser speech recognition.
   const resumeListening = () => {
     if (!voiceModeRef.current) {
       return;
     }
+    const recognition = ensureRecognition();
+    if (!recognition) {
+      return;
+    }
+    speechFinalTranscriptRef.current = "";
     setInterimTranscript("");
     setVoiceStatus("listening");
     setIsMicActive(true);
     avatarControlsRef.current?.setState("listening");
-    voiceSessionRef.current?.resume();
+    try {
+      recognition.start();
+    } catch {
+      // start() throws if it's already running; ignore.
+    }
   };
 
   // Play base64 WAV audio and tie the avatar's "speaking" animation to actual
@@ -260,34 +302,61 @@ function App() {
     setVoiceStatus("thinking");
     avatarControlsRef.current?.setState("thinking");
 
-    try {
-      const data = await sendChat({
-        message: trimmed,
-        persona: PERSONAS[persona].backend,
-        voiceMode: viaVoice, // shorter, spoken-style replies in voice mode
-        tts: viaVoice, // only synthesize audio when actually in voice mode
-      });
+    // Assistant message placeholder that fills in as tokens stream in.
+    const assistantId = `m${Date.now()}-a`;
+    let reply = "";
+    let emotion = "default";
+    let audio = null;
 
+    const paint = () => {
       const assistantMessage = {
-        id: `m${Date.now()}-a`,
+        id: assistantId,
         role: "assistant",
-        text: data.reply,
-        emotion: data.emotion,
+        text: reply,
+        emotion,
       };
       const convoWithReply = [...convoWithUser, assistantMessage];
       setMessages(convoWithReply);
       messagesRef.current = convoWithReply;
+      return convoWithReply;
+    };
 
-      reactToReply(data, { viaVoice });
+    try {
+      paint(); // show empty assistant bubble immediately
+
+      await sendChatStream(
+        {
+          message: trimmed,
+          persona: PERSONAS[persona].backend,
+          voiceMode: viaVoice, // shorter, spoken-style replies in voice mode
+          tts: viaVoice, // only synthesize audio when actually in voice mode
+        },
+        {
+          onMeta: (meta) => {
+            emotion = meta.emotion || "default";
+          },
+          onToken: (text) => {
+            reply += text;
+            paint(); // append token live
+          },
+          onDone: (data) => {
+            reply = data.reply ?? reply;
+            audio = data.audio ?? null;
+          },
+        },
+      );
+
+      const convoWithReply = paint();
+      reactToReply({ reply, emotion, audio }, { viaVoice });
       persistChat(convoWithReply);
     } catch (error) {
       console.error(error);
-      const errorMessage = {
-        id: `m${Date.now()}-e`,
-        role: "assistant",
-        text: "Sorry, I couldn't reach the server. Please make sure the backend is running.",
-      };
-      setMessages((previousMessages) => [...previousMessages, errorMessage]);
+      // Show the error in the (possibly empty) assistant placeholder bubble.
+      if (!reply) {
+        reply =
+          "Sorry, I couldn't reach the server. Please make sure the backend is running.";
+      }
+      paint();
       setVoiceStatus("idle");
       avatarControlsRef.current?.setState("idle");
       if (viaVoice && voiceModeRef.current) {
@@ -299,8 +368,26 @@ function App() {
     }
   };
 
-  // Expose the latest submitMessage to the voice-session transcript callback.
-  submitMessageRef.current = submitMessage;
+  // On each recognition turn end: auto-send what was heard, else keep listening.
+  handleRecognitionEndRef.current = () => {
+    if (!voiceModeRef.current) {
+      return;
+    }
+    const spoken = speechFinalTranscriptRef.current.trim();
+    speechFinalTranscriptRef.current = "";
+    setInterimTranscript("");
+
+    if (spoken) {
+      submitMessage(spoken, { viaVoice: true });
+    } else if (!isSendingRef.current) {
+      // No speech captured; keep listening (small delay avoids a tight loop).
+      window.setTimeout(() => {
+        if (voiceModeRef.current && !isSendingRef.current) {
+          resumeListening();
+        }
+      }, 400);
+    }
+  };
 
   const handleSend = () => submitMessage(draft, { viaVoice: false });
 
@@ -392,61 +479,36 @@ function App() {
     });
   };
 
-  const handleToggleVoiceMode = async () => {
+  const handleToggleVoiceMode = () => {
     if (isReviewingSavedChat) {
       return;
     }
 
     if (voiceModeRef.current) {
-      // Exit voice mode: stop the session and return the avatar to idle.
+      // Exit voice mode: stop recognition and return the avatar to idle.
       exitVoiceMode();
       avatarControlsRef.current?.setState("idle");
       return;
     }
 
-    if (!isSpeechSupported) {
+    // Enter voice mode: create recognition inside this click gesture (some
+    // browsers require that). getUserMedia/permission is handled by the API.
+    const recognition = ensureRecognition();
+    if (!recognition) {
       setVoiceError(
-        "Voice input isn't available in this browser. Try a recent Chrome, Firefox, Safari or Edge.",
+        "Voice input isn't available in this browser. Try Chrome, Edge, or Safari.",
       );
       return;
     }
 
-    // Enter voice mode: open the streaming session (getUserMedia prompts for
-    // mic permission here, inside the click gesture).
     setVoiceError("");
     voiceModeRef.current = true;
     setVoiceMode(true);
-    setVoiceStatus("listening");
-    setIsMicActive(true);
+    // Team UI: expand the left panel the first time the mic is used.
     if (!hasUsedMicOnce) {
       setHasUsedMicOnce(true);
     }
-
-    avatarControlsRef.current?.setState("listening");
-
-    const session = createVoiceSession({
-      onStatus: (status) => {
-        // Ignore status flips once we've left voice mode or are mid-turn.
-        if (voiceModeRef.current && !isSendingRef.current) {
-          setVoiceStatus(status);
-        }
-      },
-      onTranscript: handleVoiceTranscript,
-      onError: handleVoiceError,
-    });
-    voiceSessionRef.current = session;
-
-    try {
-      await session.start();
-    } catch (error) {
-      console.error(error);
-      // getUserMedia rejects if the user blocks the mic or none is present.
-      handleVoiceError(
-        error?.name === "NotAllowedError"
-          ? "mic-blocked"
-          : "Voice connection failed.",
-      );
-    }
+    resumeListening();
   };
 
   useEffect(() => {
@@ -554,11 +616,10 @@ function App() {
     voiceModeRef.current = false;
     setVoiceMode(false);
     try {
-      voiceSessionRef.current?.stop();
+      recognitionRef.current?.stop();
     } catch {
       // ignore
     }
-    voiceSessionRef.current = null;
     stopAudio();
     setIsMicActive(false);
     setInterimTranscript("");

@@ -9,6 +9,17 @@ const NODE_COLORS = {
   Emotion: "#8e76ee",
 };
 
+// Graph background = the theme's light green (falls back if the var is unset).
+function themeGraphBackground() {
+  if (typeof window === "undefined") {
+    return "#ebf3ef";
+  }
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--user-bubble")
+    .trim();
+  return value || "#ebf3ef";
+}
+
 async function loadCSV(path) {
   const response = await fetch(path);
   if (!response.ok) {
@@ -85,9 +96,21 @@ export default function KnowledgeGraph() {
           points,
           links,
           ...cosmographConfig,
+          backgroundColor: themeGraphBackground(),
           showLabels: true,
           showHoveredPointLabel: true,
+          // Custom class so the label pill can be styled (see .kgNodeLabel).
+          pointLabelClassName: "kgNodeLabel",
           pointColorBy: "type",
+          // Force the darker per-type colours (also set on point.color above).
+          pointColorByMap: {
+            Experience: NODE_COLORS.Experience,
+            Community: NODE_COLORS.Community,
+            Emotion: NODE_COLORS.Emotion,
+          },
+          // Bigger nodes.
+          pointSize: 9,
+          pointSizeScale: 1.6,
           onClick: (index) => {
             if (index === undefined || index === null) {
               setSelected(null);

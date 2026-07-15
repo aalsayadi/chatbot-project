@@ -11,13 +11,6 @@ export default defineConfig({
                 changeOrigin: true,
                 rewrite: (path) => path.replace(/^\/api/, ''),
             },
-            // WebSocket for streaming voice transcription. ws:true enables
-            // proxying the upgrade; path is preserved (/ws/transcribe).
-            '/ws': {
-                target: 'ws://localhost:8000',
-                ws: true,
-                changeOrigin: true,
-            },
         },
     },
 });

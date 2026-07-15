@@ -19,6 +19,18 @@ class OllamaClient:
         )
         return response.choices[0].message.content
 
+    def chat_stream(self, messages):
+        """Yield the model's reply token-by-token as it is generated."""
+        stream = self.client.chat.completions.create(
+            model="llama3.1",
+            messages=messages,
+            stream=True,
+        )
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+
     def extract_memory(self, text):
         """Ask the model to extract long-term facts from `text` as JSON.
 

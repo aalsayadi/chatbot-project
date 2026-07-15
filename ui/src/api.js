@@ -21,6 +21,57 @@ export async function sendChat({ message, persona, voiceMode = true, tts = false
     return response.json();
 }
 
+// Streaming chat: reads newline-delimited JSON from /chat/stream and invokes
+// callbacks as data arrives.
+//   onMeta({ emotion, voice })   -- once, up front
+//   onToken(text)                -- per generated token
+//   onDone({ reply, audio })     -- once, at the end
+export async function sendChatStream(
+    { message, persona, voiceMode = false, tts = false },
+    { onMeta, onToken, onDone } = {},
+) {
+    const response = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, persona, voice_mode: voiceMode, tts }),
+    });
+
+    if (!response.ok || !response.body) {
+        throw new Error(`Chat stream failed: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    const handleLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let msg;
+        try {
+            msg = JSON.parse(trimmed);
+        } catch {
+            return;
+        }
+        if (msg.type === "meta") onMeta?.(msg);
+        else if (msg.type === "token") onToken?.(msg.text || "");
+        else if (msg.type === "done") onDone?.(msg);
+    };
+
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newlineIndex;
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+            handleLine(buffer.slice(0, newlineIndex));
+            buffer = buffer.slice(newlineIndex + 1);
+        }
+    }
+    // Flush any trailing partial line.
+    handleLine(buffer);
+}
+
 // Synthesize speech for a specific piece of text on demand (speaker button).
 export async function synthesizeSpeech({ text, persona }) {
     const response = await fetch("/api/tts", {

@@ -12,14 +12,13 @@ os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_VERBOSITY"] = "error"
 
-import asyncio
 import base64
 import json
 import threading
 
-import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from memory.memory_manager import MemoryManager
@@ -96,13 +95,19 @@ class TitleResponse(BaseModel):
 
 
 def run_turn(message: str, voice_mode: bool) -> tuple[str, str]:
-    """Run one chat turn through the existing pipeline.
+    """Run one chat turn through the pipeline WITHOUT long-term extraction.
 
-    Returns (reply, sentiment_label). Mirrors the body of main.py's loop.
+    Long-term memory extraction (a second LLM call) is deferred to a background
+    task so it doesn't sit on the reply's critical path -- roughly halving the
+    per-turn LLM wait. The current message is still in the prompt history, so
+    the reply quality is unaffected; the extracted facts are just saved a moment
+    later, for future turns.
+
+    Returns (reply, sentiment_label).
     """
     sentiment_label = sentiment.analyze(message)
 
-    memory.process_user_message(message)
+    memory.add_user_message(message)
     memories = memory.retrieve_relevant_memories(message)
 
     messages = prompt_builder.build_prompt(
@@ -119,15 +124,24 @@ def run_turn(message: str, voice_mode: bool) -> tuple[str, str]:
     return reply, sentiment_label
 
 
+def _extract_memory_bg(message: str) -> None:
+    """Background job: extract + store long-term facts, serialized via the lock."""
+    with _pipeline_lock:
+        memory.extract_and_store(message)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "personas": list(VOICES.keys())}
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, background_tasks: BackgroundTasks):
     with _pipeline_lock:
         reply, sentiment_label = run_turn(req.message, req.voice_mode)
+
+    # Extract long-term memory after the reply is sent (off the critical path).
+    background_tasks.add_task(_extract_memory_bg, req.message)
 
     emotion = SENTIMENT_TO_EMOTION.get(sentiment_label, DEFAULT_EMOTION)
     voice = voice_for_persona(req.persona)
@@ -144,6 +158,58 @@ def chat(req: ChatRequest):
         emotion=emotion,
         voice=voice,
         audio=audio_b64,
+    )
+
+
+def _chat_stream_gen(req: ChatRequest):
+    """Stream one chat turn as newline-delimited JSON.
+
+    Emits:  {"type":"meta","emotion","voice"}         -- up front
+            {"type":"token","text": "..."}            -- per generated token
+            {"type":"done","reply": "...","audio": ...}  -- at the end
+    The whole turn holds the pipeline lock so turns stay serialized; the final
+    reply text drives the (optional) TTS synthesis, same as /chat.
+    """
+    with _pipeline_lock:
+        sentiment_label = sentiment.analyze(req.message)
+        memory.add_user_message(req.message)
+        memories = memory.retrieve_relevant_memories(req.message)
+        messages = prompt_builder.build_prompt(
+            sentiment_label,
+            memories,
+            memory.get_recent_messages(),
+            req.message,
+            voice_mode=req.voice_mode,
+        )
+
+        emotion = SENTIMENT_TO_EMOTION.get(sentiment_label, DEFAULT_EMOTION)
+        voice = voice_for_persona(req.persona)
+        yield json.dumps({"type": "meta", "emotion": emotion, "voice": voice}) + "\n"
+
+        parts = []
+        for token in llm.chat_stream(messages):
+            parts.append(token)
+            yield json.dumps({"type": "token", "text": token}) + "\n"
+
+        reply = "".join(parts)
+        memory.add_assistant_message(reply)
+
+        audio_b64 = None
+        if req.tts and reply.strip():
+            wav_bytes = synthesize(reply, voice=voice)
+            if wav_bytes:
+                audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+
+        yield json.dumps({"type": "done", "reply": reply, "audio": audio_b64}) + "\n"
+
+
+@app.post("/chat/stream")
+def chat_stream(req: ChatRequest, background_tasks: BackgroundTasks):
+    """Streaming version of /chat: text appears token-by-token in the UI."""
+    background_tasks.add_task(_extract_memory_bg, req.message)
+    return StreamingResponse(
+        _chat_stream_gen(req),
+        media_type="application/x-ndjson",
     )
 
 
@@ -237,66 +303,6 @@ def title(req: TitleRequest):
         return TitleResponse(title=fallback)
 
 
-# --- Streaming voice transcription (cross-browser) -------------------------
-# The browser streams 16 kHz mono Int16 PCM over this WebSocket while the user
-# is speaking. The server runs Silero VAD for endpointing and faster-whisper
-# for transcription -- the SAME stack the CLI uses -- so voice input works in
-# every major browser (no Web Speech API dependency).
-#
-# Protocol:
-#   client -> server: binary Int16 PCM frames; or text {"type":"reset"}
-#   server -> client: {"type":"speech_start"}
-#                     {"type":"speech_end"}
-#                     {"type":"transcript","text": "..."}
-#                     {"type":"error","message": "..."}
-@app.websocket("/ws/transcribe")
-async def ws_transcribe(ws: WebSocket):
-    await ws.accept()
-    loop = asyncio.get_event_loop()
-
-    # Import + model load can be slow the first time; do it off the event loop.
-    try:
-        from voice.stt import SileroEndpointer, transcribe_pcm
-        endpointer = await loop.run_in_executor(None, SileroEndpointer)
-    except Exception as exc:  # e.g. silero-vad / faster-whisper not installed
-        await ws.send_json({"type": "error", "message": f"voice unavailable: {exc}"})
-        await ws.close()
-        return
-
-    try:
-        while True:
-            message = await ws.receive()
-
-            if message["type"] == "websocket.disconnect":
-                break
-
-            data = message.get("bytes")
-            if data is not None:
-                pcm = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
-                events = await loop.run_in_executor(None, endpointer.process, pcm)
-                for kind, payload in events:
-                    if kind == "start":
-                        await ws.send_json({"type": "speech_start"})
-                    elif kind == "utterance":
-                        await ws.send_json({"type": "speech_end"})
-                        text = await loop.run_in_executor(
-                            None, transcribe_pcm, payload, 16000
-                        )
-                        await ws.send_json({"type": "transcript", "text": text})
-                continue
-
-            text_msg = message.get("text")
-            if text_msg:
-                try:
-                    control = json.loads(text_msg)
-                except ValueError:
-                    control = {}
-                if control.get("type") == "reset":
-                    await loop.run_in_executor(None, endpointer.reset)
-    except WebSocketDisconnect:
-        pass
-    except Exception as exc:
-        try:
-            await ws.send_json({"type": "error", "message": str(exc)})
-        except Exception:
-            pass
+# NOTE: Web-app speech-to-text uses the browser's built-in Web Speech API on
+# the client, so there is no server-side STT endpoint. The faster-whisper +
+# Silero VAD stack in voice/stt.py is used only by the CLI (main.py) voice mode.

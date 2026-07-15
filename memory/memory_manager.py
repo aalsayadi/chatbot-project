@@ -17,24 +17,29 @@ class MemoryManager:
         self.retriever = MemoryRetriever()
         self.llm = OllamaClient()
 
-    def process_user_message(self,text):
-        """Record the message and extract any long-term facts it contains.
+    def add_user_message(self, text):
+        """Record the user message in short-term history (cheap, immediate)."""
+        self.short_term.add("user", text)
 
-        Extraction failures (e.g. the LLM returning non-JSON output) are
-        swallowed so a single bad response doesn't interrupt the conversation.
+    def extract_and_store(self, text):
+        """Extract long-term facts from `text` and persist them.
+
+        This makes an LLM call, so the web server runs it in the background
+        (off the reply's critical path). Extraction failures (e.g. non-JSON
+        output) are swallowed so one bad response can't interrupt anything.
         """
-        self.short_term.add("user",text)
-
         try:
             raw = self.llm.extract_memory(text)
-
             data = json.loads(raw)
-
-            for mem in data.get("memories",[]):
+            for mem in data.get("memories", []):
                 self.store.save_memory(mem)
-
-        except Exception as e:
+        except Exception:
             pass
+
+    def process_user_message(self, text):
+        """Record the message and extract facts synchronously (used by the CLI)."""
+        self.add_user_message(text)
+        self.extract_and_store(text)
         
     def add_assistant_message(self,text):
         """Record the assistant's reply in short-term history."""
