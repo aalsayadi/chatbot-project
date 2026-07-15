@@ -4,7 +4,7 @@ import { Cosmograph, prepareCosmographData } from "@cosmograph/cosmograph";
 
 // Node colours by ontology type (kept in sync with the legend below).
 const NODE_COLORS = {
-  Experience: "#0068ad",
+  Experience: "#f2b705", // yellow
   Community: "#ff69b4",
   Emotion: "#8e76ee",
 };
