@@ -525,7 +525,7 @@ function App() {
   // --- Automatic conversation saving -----------------------------------
   const buildTranscriptSnippet = (convo) =>
     convo
-      .slice(0, 4)
+      .slice(0, 8)
       .map(
         (message) =>
           `${message.role === "user" ? "User" : "Assistant"}: ${message.text.slice(0, 200)}`,
@@ -570,27 +570,34 @@ function App() {
     });
   };
 
-  // Persist the conversation automatically after each exchange. Generates a
-  // fitting title from the content the first time it becomes savable.
+  // Persist the conversation automatically after each exchange, and (re)generate
+  // its title over the first few exchanges so it reflects the real topic -- even
+  // when the chat opens with a greeting like "hello".
   const persistChat = (convo) => {
     if (isReviewingSavedChat) {
       return;
     }
-    if (!convo.some((message) => message.role === "assistant")) {
+    const assistantCount = convo.filter(
+      (message) => message.role === "assistant",
+    ).length;
+    if (assistantCount === 0) {
       return; // nothing meaningful to save yet
     }
 
+    // First time this chat becomes savable: assign an id + a provisional title.
     if (!activeChatIdRef.current) {
-      const chatId = `saved-${Date.now()}`;
-      activeChatIdRef.current = chatId;
-
-      // Provisional title from the first user message; refined via the LLM.
+      activeChatIdRef.current = `saved-${Date.now()}`;
       const firstUser = convo.find((message) => message.role === "user");
-      const fallback = firstUser
+      currentTitleRef.current = firstUser
         ? firstUser.text.slice(0, 32) + (firstUser.text.length > 32 ? "…" : "")
         : "New conversation";
-      currentTitleRef.current = fallback;
+    }
 
+    // Refresh the title for the first few exchanges (then stop, to bound the
+    // number of background title calls). This lets a real topic replace an
+    // opening greeting once it appears.
+    if (assistantCount <= 3) {
+      const chatId = activeChatIdRef.current;
       generateTitle({ text: buildTranscriptSnippet(convo) })
         .then(({ title }) => {
           // Ignore if the user has since moved to a different conversation.
@@ -600,7 +607,7 @@ function App() {
           }
         })
         .catch(() => {
-          // keep the fallback title
+          // keep the current title
         });
     }
 

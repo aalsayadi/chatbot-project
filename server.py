@@ -37,6 +37,18 @@ prompt_builder = PromptBuilder()
 # turns so concurrent requests can't interleave. Fine for a local app.
 _pipeline_lock = threading.Lock()
 
+
+def _warm_up_llm():
+    """Preload the Ollama model in the background so the first message is fast."""
+    try:
+        llm.warm_up()
+    except Exception:
+        pass
+
+
+# Kick off the warm-up without blocking server startup.
+threading.Thread(target=_warm_up_llm, daemon=True).start()
+
 # Map the sentiment classifier's labels to avatar emotions. Per the avatar
 # team's note we avoid "happy"/"surprised" and use "relaxed" for positive.
 SENTIMENT_TO_EMOTION = {
@@ -256,28 +268,52 @@ def _clean_title(raw: str, fallback: str) -> str:
     return text or fallback
 
 
-def _fallback_title(snippet: str) -> str:
-    """Derive a usable title from the raw transcript snippet."""
-    first_line = ""
+def _first_user_text(snippet: str) -> str:
+    """Return the first user message from the transcript snippet."""
+    for line in snippet.splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("user:"):
+            return stripped[len("user:"):].strip()
     for line in snippet.splitlines():
         if line.strip():
-            first_line = line.strip()
-            break
-    # Drop a leading "User:"/"Assistant:" label if present.
-    for label in ("User:", "Assistant:", "user:", "assistant:"):
-        if first_line.startswith(label):
-            first_line = first_line[len(label):].strip()
-            break
-    first_line = first_line[:40].strip()
-    return first_line or "New conversation"
+            return line.strip()
+    return ""
+
+
+def _normalize(text: str) -> str:
+    """Lowercase alphanumeric words for loose comparison."""
+    kept = "".join(c.lower() if (c.isalnum() or c.isspace()) else " " for c in text)
+    return " ".join(kept.split())
+
+
+def _looks_like_copy(title: str, user_text: str) -> bool:
+    """True if the 'title' is really just (a chunk of) the user's message."""
+    t = _normalize(title)
+    u = _normalize(user_text)
+    if not t:
+        return True
+    if t == u:
+        return True
+    # The model copied a whole phrase instead of summarizing the topic.
+    if len(t.split()) >= 4 and (t in u or u in t):
+        return True
+    return False
+
+
+def _fallback_title(snippet: str) -> str:
+    """A short, sidebar-friendly fallback from the first user message."""
+    words = _first_user_text(snippet).split()
+    short = " ".join(words[:5])[:36].strip().rstrip(".,;:!-")
+    return short or "New conversation"
 
 
 @app.post("/title", response_model=TitleResponse)
 def title(req: TitleRequest):
     """Generate a short conversation title from its content via the LLM.
 
-    Falls back to a trimmed snippet if the model misbehaves, so the caller
-    always gets something usable.
+    Falls back to a trimmed snippet if the model misbehaves (fails, returns
+    nothing, or just copies the user's message), so the caller always gets
+    something usable and never a verbatim copy of a typo-filled message.
     """
     snippet = req.text.strip()
     fallback = _fallback_title(snippet)
@@ -286,19 +322,32 @@ def title(req: TitleRequest):
         return TitleResponse(title=fallback)
 
     system = (
-        "You create short titles for chat conversations. "
-        "Read the conversation and reply with a title of 2 to 4 words that "
-        "describes what it is about. "
-        "Reply with ONLY the title -- no quotes, no punctuation, no prefix "
-        "such as 'Title:', and no explanation."
+        "You write very short titles for chat conversations. "
+        "Summarize what the conversation is ABOUT in 2 to 4 words.\n"
+        "Rules:\n"
+        "- Describe the topic; do NOT copy or quote the user's words.\n"
+        "- Ignore spelling mistakes in the conversation.\n"
+        "- Reply with ONLY the title: no quotes, no punctuation, no prefix "
+        "like 'Title:', no explanation.\n"
+        "Examples:\n"
+        "(feeling burned out from caregiving) -> Caregiver Burnout\n"
+        "(asking how to sleep better) -> Improving Sleep\n"
+        "(coming out to family) -> Coming Out"
     )
     try:
         with _pipeline_lock:
-            raw = llm.chat([
-                {"role": "system", "content": system},
-                {"role": "user", "content": snippet},
-            ])
-        return TitleResponse(title=_clean_title(raw, fallback))
+            raw = llm.chat(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": snippet},
+                ],
+                temperature=0,
+            )
+        cleaned = _clean_title(raw, fallback)
+        # If the model just echoed the message, prefer the short fallback.
+        if _looks_like_copy(cleaned, _first_user_text(snippet)):
+            return TitleResponse(title=fallback)
+        return TitleResponse(title=cleaned)
     except Exception:
         return TitleResponse(title=fallback)
 
