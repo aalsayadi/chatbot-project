@@ -1,5 +1,11 @@
 import * as THREE from "three";
-import { loadAvatar, swapAvatar, getCurrentVrm, DEFAULT_VRM_PATH } from "./avatar.js";
+import {
+    loadAvatar,
+    swapAvatar,
+    getCurrentVrm,
+    setCurrentVrm,
+    DEFAULT_VRM_PATH,
+} from "./avatar.js";
 import { updateIdle } from "./idle.js";
 import {
     createMixer,
@@ -42,6 +48,12 @@ export async function initAvatar(container, initialVrmPath = DEFAULT_VRM_PATH) {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(width, height);
     renderer.setClearColor(0x000000, 0); // fully transparent
+
+    // Clear any leftover canvas (e.g. from a React StrictMode double-mount) so
+    // only this instance's canvas is ever in the DOM.
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
     container.appendChild(renderer.domElement);
 
     const light = new THREE.DirectionalLight(0xffffff, 2);
@@ -128,7 +140,12 @@ export async function initAvatar(container, initialVrmPath = DEFAULT_VRM_PATH) {
         updateAvatarController(delta);
 
         lookAtTarget.position.copy(camera.position);
-        if (vrm) vrm.update(delta);
+        if (vrm) {
+            // Keep the shared "current VRM" pointing at THIS live instance's
+            // model, so a persona swap always removes the right one.
+            setCurrentVrm(vrm);
+            vrm.update(delta);
+        }
 
         renderer.render(scene, camera);
     }

@@ -81,3 +81,14 @@ export async function swapAvatar(scene, vrmPath) {
 export function getCurrentVrm() {
     return currentVrm;
 }
+
+/**
+ * Point the shared "current VRM" at a specific model. The render loop calls
+ * this each frame so that, if React (StrictMode) briefly creates a second
+ * avatar instance, the *live* instance keeps ownership of this module-level
+ * pointer -- otherwise a stale reference makes a persona swap remove the wrong
+ * model and leave the old avatar frozen behind the new one.
+ */
+export function setCurrentVrm(vrm) {
+    currentVrm = vrm;
+}
