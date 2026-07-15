@@ -110,8 +110,9 @@ browser's built-in Web Speech API: available in **Chrome, Edge, and Safari**,
 but **not Firefox**. In Firefox everything else still works (type to chat, and
 use the speaker icon to hear replies).
 
-> **Recommended browser: Google Chrome** — it has the most reliable Web Speech
-> API and WebGL support, so voice input and the 3D avatar behave best there.
+> [!TIP]
+> **Recommended browser: Google Chrome** — most reliable Web Speech API and
+> WebGL support, so voice input and the 3D avatar behave best there.
 
 ## Setup
 
